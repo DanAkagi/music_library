@@ -13,7 +13,7 @@
       <RouterView />
     </main>
 
-    <MusicPlayer v-if="musicStore.currentTrack" />
+    <MusicPlayer />
   </div>
 </template>
 

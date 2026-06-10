@@ -20,14 +20,24 @@ export interface Playlist {
   criteria?: PlaylistCriteria;
 }
 
+export interface CriterionGroup {
+  values: string[];
+  mode: 'include' | 'exclude';
+}
+
 export interface PlaylistCriteria {
+  // include/exclude per category
   artists?: string[];
   excludeArtists?: string[];
   genres?: string[];
   excludeGenres?: string[];
   languages?: string[];
+  // ranges
   yearMin?: number;
   yearMax?: number;
-  maxDurationMinutes?: number;
+  // duration (minutes)
   minDurationMinutes?: number;
+  maxDurationMinutes?: number;
+  // how many combinations to generate
+  combinationCount?: number;
 }
