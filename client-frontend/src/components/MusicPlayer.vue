@@ -11,9 +11,9 @@
     </div>
 
     <div class="player-controls">
-      <button @click="musicStore.playPrev()" title="Précédent">⏮</button>
-      <button class="play-btn" @click="togglePlay">{{ musicStore.isPlaying ? '⏸' : '▶' }}</button>
-      <button @click="musicStore.playNext()" title="Suivant">⏭</button>
+      <button @click="musicStore.playPrev()" title="Précédent"><i class="bi bi-skip-start-fill"></i></button>
+      <button class="play-btn" @click="togglePlay"><i :class="musicStore.isPlaying ? 'bi bi-pause-fill' : 'bi bi-play-fill'"></i></button>
+      <button @click="musicStore.playNext()" title="Suivant"><i class="bi bi-skip-end-fill"></i></button>
     </div>
 
     <div class="player-progress">
@@ -23,7 +23,7 @@
     </div>
 
     <div class="player-volume">
-      <span>🔊</span>
+      <span><i class="bi bi-volume-up-fill"></i></span>
       <input type="range" min="0" max="1" step="0.01" v-model="volume" @input="setVolume" />
     </div>
   </div>
@@ -112,12 +112,12 @@ onMounted(() => { if (audioEl.value) audioEl.value.volume = volume.value; });
 .player-title { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player-meta { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player-controls { display: flex; align-items: center; gap: 0.5rem; }
-.player-controls button { background: none; border: none; color: var(--text); cursor: pointer; font-size: 1rem; padding: 0.25rem; opacity: 0.7; transition: opacity 0.15s; }
+.player-controls button { background: none; border: none; color: var(--text); cursor: pointer; font-size: 1.2rem; padding: 0.25rem; opacity: 0.7; transition: opacity 0.15s; }
 .player-controls button:hover { opacity: 1; }
-.play-btn { font-size: 1.4rem !important; opacity: 1 !important; color: var(--accent) !important; }
+.play-btn { font-size: 1.6rem !important; opacity: 1 !important; color: var(--accent) !important; }
 .player-progress { display: flex; align-items: center; gap: 0.5rem; flex: 2; min-width: 0; }
 .time { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
 .progress-bar, input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; }
 .player-volume { display: flex; align-items: center; gap: 0.5rem; width: 120px; }
-.player-volume span { font-size: 0.9rem; }
+.player-volume span { font-size: 1.1rem; }
 </style>

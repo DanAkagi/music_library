@@ -19,17 +19,17 @@
           <div class="playlist-card-info">
             <div v-if="editingId === pl.id" class="rename-row" @click.stop>
               <input v-model="renameValue" class="rename-input" @keyup.enter="confirmRename(pl.id)" />
-              <button @click="confirmRename(pl.id)" class="btn-sm">✓</button>
-              <button @click="editingId = null" class="btn-sm">✕</button>
+              <button @click="confirmRename(pl.id)" class="btn-sm"><i class="bi bi-check"></i></button>
+              <button @click="editingId = null" class="btn-sm"><i class="bi bi-x"></i></button>
             </div>
             <div v-else class="playlist-name">{{ pl.name }}</div>
             <div class="playlist-sub">{{ pl.tracks.length }} titre(s) · {{ totalDuration(pl.tracks) }}</div>
           </div>
           <div class="playlist-card-actions" @click.stop>
-            <button @click="startEdit(pl)" title="Renommer">✏️</button>
-            <button @click="playPlaylist(pl)" title="Lire">▶</button>
-            <button @click="downloadPlaylist(pl)" title="Télécharger">⬇</button>
-            <button @click="playlistStore.deletePlaylist(pl.id)" title="Supprimer">🗑</button>
+            <button @click="startEdit(pl)" title="Renommer"><i class="bi bi-pencil-fill"></i></button>
+            <button @click="playPlaylist(pl)" title="Lire"><i class="bi bi-play-fill"></i></button>
+            <button @click="downloadPlaylist(pl)" title="Télécharger"><i class="bi bi-download"></i></button>
+            <button @click="playlistStore.deletePlaylist(pl.id)" title="Supprimer"><i class="bi bi-trash-fill"></i></button>
           </div>
         </div>
 
@@ -42,9 +42,9 @@
             @download="downloadOne(track)"
           >
             <template #actions>
-              <button @click="playlistStore.removeTrackFromPlaylist(pl.id, track.filename)" title="Retirer">✕</button>
-              <button v-if="idx > 0" @click="playlistStore.reorderTrack(pl.id, idx, idx - 1)" title="Monter">↑</button>
-              <button v-if="idx < pl.tracks.length - 1" @click="playlistStore.reorderTrack(pl.id, idx, idx + 1)" title="Descendre">↓</button>
+              <button @click="playlistStore.removeTrackFromPlaylist(pl.id, track.filename)" title="Retirer"><i class="bi bi-x"></i></button>
+              <button v-if="idx > 0" @click="playlistStore.reorderTrack(pl.id, idx, idx - 1)" title="Monter"><i class="bi bi-arrow-up"></i></button>
+              <button v-if="idx < pl.tracks.length - 1" @click="playlistStore.reorderTrack(pl.id, idx, idx + 1)" title="Descendre"><i class="bi bi-arrow-down"></i></button>
             </template>
           </TrackItem>
 

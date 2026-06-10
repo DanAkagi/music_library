@@ -9,7 +9,7 @@
           placeholder="Rechercher titre, artiste, album..."
         />
         <button class="btn-outline" @click="downloadSelected" :disabled="selected.size === 0">
-          ⬇ Télécharger ({{ selected.size }})
+          <i class="bi bi-download"></i> Télécharger ({{ selected.size }})
         </button>
       </div>
     </div>

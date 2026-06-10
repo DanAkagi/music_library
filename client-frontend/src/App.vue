@@ -1,7 +1,7 @@
 <template>
   <div class="app">
     <header class="app-header">
-      <h1 class="logo">🎵 Music Library</h1>
+      <h1 class="logo"><i class="bi bi-music-note-beamed"></i> Music Library</h1>
       <nav class="tabs">
         <RouterLink to="/" exact-active-class="active">Tous</RouterLink>
         <RouterLink to="/playlists" active-class="active">Saved Playlists</RouterLink>

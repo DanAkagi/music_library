@@ -2,7 +2,8 @@
   <div class="track-item" :class="{ active: isActive }">
     <!-- Click zone for play (excludes actions column) -->
     <div class="track-play-icon" @click="emit('play', track)">
-      {{ isActive && isPlaying ? '▶' : '#' }}
+      <i v-if="isActive && isPlaying" class="bi bi-play-fill"></i>
+      <span v-else>#</span>
     </div>
     <div class="track-info" @click="emit('play', track)">
       <div class="track-title">{{ track.title }}</div>
@@ -18,7 +19,7 @@
     <!-- Actions: never propagate click to play -->
     <div class="track-actions" @click.stop>
       <slot name="actions" />
-      <button title="Télécharger" @click.stop="emit('download', track)">⬇</button>
+      <button title="Télécharger" @click.stop="emit('download', track)"><i class="bi bi-download"></i></button>
     </div>
   </div>
 </template>

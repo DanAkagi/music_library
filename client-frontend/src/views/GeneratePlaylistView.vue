@@ -11,14 +11,14 @@
           <label>{{ cat.label }}</label>
           <div class="criterion-row" v-for="(entry, i) in cat.entries" :key="i">
             <select v-model="entry.mode" class="mode-select">
-              <option value="include">✅ inclure</option>
-              <option value="exclude">🚫 exclure</option>
+              <option value="include"><i class="bi bi-check-circle-fill"></i> inclure</option>
+              <option value="exclude"><i class="bi bi-x-circle-fill"></i> exclure</option>
             </select>
             <select v-model="entry.value" class="value-select">
               <option value="">-- choisir --</option>
               <option v-for="opt in cat.options" :key="opt" :value="opt">{{ opt }}</option>
             </select>
-            <button class="btn-remove" @click="cat.entries.splice(i, 1)">✕</button>
+            <button class="btn-remove" @click="cat.entries.splice(i, 1)"><i class="bi bi-x"></i></button>
           </div>
           <button class="btn-add" @click="cat.entries.push({ mode: 'include', value: '' })">+ {{ cat.label }}</button>
         </div>
@@ -52,9 +52,9 @@
             </div>
             <div class="combo-actions">
               <input v-model="playlistNames[idx]" class="name-input" :placeholder="`Playlist ${idx + 1}`" />
-              <button class="btn-sm-accent" @click="save(idx)" :disabled="!playlist.length || !playlistNames[idx]?.trim()">💾</button>
-              <button class="btn-sm-outline" @click="playAll(playlist)" :disabled="!playlist.length">▶</button>
-              <button class="btn-sm-outline" @click="download(playlist, idx)" :disabled="!playlist.length">⬇</button>
+              <button class="btn-sm-accent" @click="save(idx)" :disabled="!playlist.length || !playlistNames[idx]?.trim()"><i class="bi bi-save-fill"></i></button>
+              <button class="btn-sm-outline" @click="playAll(playlist)" :disabled="!playlist.length"><i class="bi bi-play-fill"></i></button>
+              <button class="btn-sm-outline" @click="download(playlist, idx)" :disabled="!playlist.length"><i class="bi bi-download"></i></button>
             </div>
           </div>
 
@@ -72,14 +72,14 @@
                     @change="(e) => replaceTrack(idx, tIdx, (e.target as HTMLSelectElement).value)"
                     title="Remplacer par..."
                   >
-                    <option value="">↔</option>
+                    <option value=""><i class="bi bi-arrow-left-right"></i></option>
                     <option
                       v-for="t in allTracks.filter(t => !playlist.some(p => p.filename === t.filename))"
                       :key="t.filename"
                       :value="t.filename"
                     >{{ t.title }}</option>
                   </select>
-                  <button title="Retirer" @click.stop="removeTrack(idx, tIdx)">✕</button>
+                  <button title="Retirer" @click.stop="removeTrack(idx, tIdx)"><i class="bi bi-x"></i></button>
                 </template>
               </TrackItem>
             </div>

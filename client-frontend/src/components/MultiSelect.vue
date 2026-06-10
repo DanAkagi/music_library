@@ -5,10 +5,10 @@
       <span v-else class="ms-tags">
         <span v-for="v in modelValue" :key="v" class="ms-tag">
           {{ v }}
-          <button @click.stop="remove(v)">✕</button>
+          <button @click.stop="remove(v)"><i class="bi bi-x"></i></button>
         </span>
       </span>
-      <span class="ms-arrow">{{ open ? '▲' : '▼' }}</span>
+      <span class="ms-arrow"><i :class="open ? 'bi bi-caret-up-fill' : 'bi bi-caret-down-fill'"></i></span>
     </div>
     <div v-if="open" class="ms-dropdown">
       <div
