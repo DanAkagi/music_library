@@ -7,15 +7,18 @@
     "dev": "ts-node-dev --respawn --transpile-only server/index.ts",
     "build": "tsc",
     "start": "node dist/server/index.js",
-    "lint": "eslint . --ext .ts"
+    "lint": "eslint . --ext .ts",
+    "db:migrate-csv": "ts-node scripts/migrate-csv-to-mysql.ts",
+    "db:reset": "ts-node scripts/reset-database.ts"
   },
   "dependencies": {
     "amqplib": "^0.10.4",
+    "archiver": "^7.0.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "music-metadata": "^10.5.0",
-    "archiver": "^7.0.1",
+    "mysql2": "^3.22.5",
     "winston": "^3.13.0"
   },
   "devDependencies": {

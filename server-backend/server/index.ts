@@ -7,6 +7,7 @@ import { startMetaDataExtractor } from './services/meta-data-extractor';
 import { startSenderApi } from './services/sender-api';
 import { startFileSuppressor } from './services/file-suppressor';
 import { closeRabbitMQ } from './config/rabbitmq';
+import { initDatabase, closeDatabase } from './config/database';
 
 dotenv.config();
 
@@ -22,6 +23,9 @@ app.use('/api', apiRouter);
 const startServices = async () => {
   try {
     console.log('🎵 Starting Music Library Backend...');
+
+    await initDatabase();
+    console.log('✅ MySQL database ready.');
 
     // Start all RabbitMQ consumers first
     await startMetaDataExtractor();
@@ -47,6 +51,7 @@ app.listen(PORT, async () => {
 const shutdown = async () => {
   console.log('\n🛑 Shutting down gracefully...');
   await closeRabbitMQ();
+  await closeDatabase();
   process.exit(0);
 };
 

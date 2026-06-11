@@ -8,7 +8,11 @@ import { QueueMessage, UpdateCheckerPayload } from '../config/types';
 dotenv.config();
 
 const MUSIC_PATH = process.env.MUSIC_PATH || '';
-const TIME_INTERVAL = parseInt(process.env.TIME_INTERVAL_UPDATE_CHECKER || '5') * 60 * 1000;
+// TIME_INTERVAL_UPDATE_CHECKER_SECONDS (prioritaire) ou TIME_INTERVAL_UPDATE_CHECKER en minutes
+const INTERVAL_SECONDS = parseInt(process.env.TIME_INTERVAL_UPDATE_CHECKER_SECONDS || '', 10);
+const TIME_INTERVAL = Number.isFinite(INTERVAL_SECONDS)
+  ? INTERVAL_SECONDS * 1000
+  : parseInt(process.env.TIME_INTERVAL_UPDATE_CHECKER || '5', 10) * 60 * 1000;
 
 // Scan all MP3s currently present in the directory.
 // No in-memory tracking: file-suppressor deletes processed files,

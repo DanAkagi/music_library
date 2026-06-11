@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { loadTracksFromCSV } from '@/services/csvService';
+import { loadTracks } from '@/services/trackService';
 import type { Track } from '@/services/types';
 
 export const useMusicStore = defineStore('music', () => {
@@ -43,7 +43,7 @@ export const useMusicStore = defineStore('music', () => {
     isLoading.value = true;
     error.value = null;
     try {
-      tracks.value = await loadTracksFromCSV();
+      tracks.value = await loadTracks();
     } catch (e) {
       error.value = 'Impossible de charger la bibliothèque musicale.';
       console.error(e);

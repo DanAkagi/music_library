@@ -1,9 +1,16 @@
 <template>
   <div class="track-item" :class="{ active: isActive }">
-    <!-- Click zone for play (excludes actions column) -->
-    <div class="track-play-icon" @click="emit('play', track)">
-      {{ isActive && isPlaying ? '▶' : '#' }}
-    </div>
+    <button
+      type="button"
+      class="cover"
+      :style="{ background: coverGradient }"
+      @click="emit('play', track)"
+      :aria-label="`Lire ${track.title}`"
+    >
+      <span v-if="isActive && isPlaying" class="cover-play">❚❚</span>
+      <span v-else class="cover-play">▶</span>
+    </button>
+
     <div class="track-info" @click="emit('play', track)">
       <div class="track-title">{{ track.title }}</div>
       <div class="track-meta">
@@ -13,19 +20,23 @@
         <span v-if="track.year" class="badge">{{ track.year }}</span>
       </div>
     </div>
-    <div class="track-duration" @click="emit('play', track)">{{ formatDuration(track.duration) }}</div>
 
-    <!-- Actions: never propagate click to play -->
+    <div class="track-duration" @click="emit('play', track)">
+      {{ formatDuration(track.duration) }}
+    </div>
+
     <div class="track-actions" @click.stop>
       <slot name="actions" />
-      <button title="Télécharger" @click.stop="emit('download', track)">⬇</button>
+      <button type="button" class="btn btn-ghost btn-sm" title="Télécharger" @click.stop="emit('download', track)">
+        ↓
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { Track } from '@/services/types';
-import { formatDuration } from '@/services/csvService';
+import { formatDuration } from '@/services/trackService';
 import { useMusicStore } from '@/stores/music';
 import { computed } from 'vue';
 
@@ -38,43 +49,101 @@ const emit = defineEmits<{
 const musicStore = useMusicStore();
 const isActive = computed(() => musicStore.currentTrack?.filename === props.track.filename);
 const isPlaying = computed(() => musicStore.isPlaying);
+
+const coverGradient = computed(() => {
+  let hash = 0;
+  const str = props.track.title || props.track.filename;
+  for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  const hues = [168, 24, 200, 340, 45, 210];
+  const h = hues[Math.abs(hash) % hues.length];
+  return `linear-gradient(145deg, hsl(${h}, 55%, 42%), hsl(${h + 40}, 60%, 58%))`;
+});
 </script>
 
 <style scoped>
 .track-item {
-  display: flex; align-items: center; gap: 1rem;
-  padding: 0.6rem 1rem; border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.65rem 1.1rem;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
 }
-.track-item.active { background: rgba(124, 106, 247, 0.1); }
 
-.track-play-icon {
-  width: 1.5rem; text-align: center; font-size: 0.8rem;
-  color: var(--text-muted); flex-shrink: 0; cursor: pointer;
+.track-item:last-child { border-bottom: none; }
+
+.track-item:hover { background: var(--surface-hover); }
+
+.track-item.active {
+  background: var(--accent-soft);
+  border-left: 3px solid var(--accent);
+  padding-left: calc(1.1rem - 3px);
 }
-.track-item.active .track-play-icon { color: var(--accent); }
 
-.track-info { flex: 1; min-width: 0; cursor: pointer; }
-.track-info:hover ~ .track-duration, .track-info:hover { opacity: 0.85; }
-
-.track-title { font-size: 0.9rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.track-meta { font-size: 0.78rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.15rem; }
-.badge { background: var(--surface2); border-radius: 4px; padding: 0 5px; font-size: 0.72rem; margin-left: 4px; }
-
-.track-duration { font-size: 0.8rem; color: var(--text-muted); flex-shrink: 0; cursor: pointer; }
-
-.track-actions { display: flex; gap: 0.25rem; opacity: 0; transition: opacity 0.15s; flex-shrink: 0; }
-.track-item:hover .track-actions { opacity: 1; }
-.track-actions button {
-  background: none; border: none; color: var(--text-muted); cursor: pointer;
-  font-size: 0.85rem; padding: 0.2rem 0.4rem; border-radius: 4px;
-  transition: color 0.15s, background 0.15s;
+.cover {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border: none;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.15s;
 }
-.track-actions button:hover { color: var(--text); background: var(--surface); }
 
-/* Hover highlight — only on clickable zones */
-.track-play-icon:hover, .track-info:hover, .track-duration:hover {
-  color: var(--accent);
+.cover:hover { transform: scale(1.05); }
+
+.cover-play {
+  color: #fff;
+  font-size: 0.7rem;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
-.track-item:hover { background: var(--surface2); }
-.track-item.active:hover { background: rgba(124, 106, 247, 0.15); }
+
+.track-info {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.track-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.track-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 0.15rem;
+}
+
+.track-duration {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  cursor: pointer;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.track-actions {
+  display: flex;
+  gap: 0.2rem;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.track-item:hover .track-actions,
+.track-item.active .track-actions { opacity: 1; }
 </style>

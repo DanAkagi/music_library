@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import archiver from 'archiver';
+import { getAllTracks } from '../services/track-repository';
 
 const router = Router();
 
@@ -80,6 +81,16 @@ router.post('/music/download', (req: Request, res: Response) => {
   }
 
   archive.finalize();
+});
+
+// GET /api/tracks — all track metadata from MySQL
+router.get('/tracks', async (_req: Request, res: Response) => {
+  try {
+    const tracks = await getAllTracks();
+    res.json({ tracks });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
 });
 
 // GET /api/health
