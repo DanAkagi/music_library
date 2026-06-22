@@ -2,6 +2,7 @@ import path from 'path';
 import { parseFile } from 'music-metadata';
 import { getRabbitMQChannel, QUEUES } from '../config/rabbitmq';
 import { metaDataLogger as logger } from '../config/logger';
+import { saveMetadata } from '../config/database';
 import {
   QueueMessage,
   UpdateCheckerPayload,
@@ -68,7 +69,17 @@ export const startMetaDataExtractor = async (): Promise<void> => {
       try {
         const meta = await extractMetadata(filepath);
         files.push(meta);
-        logger.info(`  [DONE] ${path.basename(filepath)} → metadata extracted`);
+        
+        // Log extracted metadata details
+        logger.info(`  [METADATA] ${path.basename(filepath)} | Title: ${meta.title} | Artist: ${meta.artist || 'N/A'} | Album: ${meta.album || 'N/A'} | Genre: ${meta.genre || 'N/A'} | Year: ${meta.year || 'N/A'} | Duration: ${meta.duration ? `${meta.duration}s` : 'N/A'} | Bitrate: ${meta.bitrate ? `${meta.bitrate}kbps` : 'N/A'} | SampleRate: ${meta.sampleRate ? `${meta.sampleRate}Hz` : 'N/A'}`);
+        
+        // Save metadata to PostgreSQL
+        try {
+          await saveMetadata(meta);
+          logger.info(`  [DONE] ${path.basename(filepath)} → metadata extracted and saved to database`);
+        } catch (dbErr) {
+          logger.error(`  [DB FAIL] ${path.basename(filepath)} | reason: ${(dbErr as Error).message}`);
+        }
       } catch (err) {
         logger.error(`  [FAIL] ${path.basename(filepath)} | reason: ${(err as Error).message}`);
       }

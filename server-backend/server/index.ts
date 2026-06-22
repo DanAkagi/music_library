@@ -7,6 +7,7 @@ import { startMetaDataExtractor } from './services/meta-data-extractor';
 import { startSenderApi } from './services/sender-api';
 import { startFileSuppressor } from './services/file-suppressor';
 import { closeRabbitMQ } from './config/rabbitmq';
+import { initDatabase } from './config/database';
 
 dotenv.config();
 
@@ -22,6 +23,10 @@ app.use('/api', apiRouter);
 const startServices = async () => {
   try {
     console.log('🎵 Starting Music Library Backend...');
+
+    // Initialize PostgreSQL database
+    await initDatabase();
+    console.log('📊 Database initialized successfully');
 
     // Start all RabbitMQ consumers first
     await startMetaDataExtractor();
