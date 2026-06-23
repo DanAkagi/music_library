@@ -15,7 +15,7 @@
       <div class="track-title">{{ track.title }}</div>
       <div class="track-meta">
         <span v-if="track.artist">{{ track.artist }}</span>
-        <span v-if="track.album"> · {{ track.album }}</span>
+        <span v-if="displayAlbum"> · {{ displayAlbum }}</span>
         <span v-if="track.genre" class="badge">{{ track.genre }}</span>
         <span v-if="track.year" class="badge">{{ track.year }}</span>
       </div>
@@ -49,6 +49,16 @@ const emit = defineEmits<{
 const musicStore = useMusicStore();
 const isActive = computed(() => musicStore.currentTrack?.filename === props.track.filename);
 const isPlaying = computed(() => musicStore.isPlaying);
+
+const displayAlbum = computed(() => {
+  const album = props.track.album?.trim();
+  if (!album) return undefined;
+  const artist = props.track.artist?.trim().toLowerCase();
+  if (artist && album.toLowerCase() === artist) return undefined;
+  const title = props.track.title?.trim().toLowerCase();
+  if (title && album.toLowerCase() === title) return undefined;
+  return album;
+});
 
 const coverGradient = computed(() => {
   let hash = 0;

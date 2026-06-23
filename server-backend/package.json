@@ -9,7 +9,8 @@
     "start": "node dist/server/index.js",
     "lint": "eslint . --ext .ts",
     "db:migrate-csv": "ts-node scripts/migrate-csv-to-mysql.ts",
-    "db:reset": "ts-node scripts/reset-database.ts"
+    "db:reset": "ts-node scripts/reset-database.ts",
+    "db:fix-metadata": "ts-node scripts/fix-metadata.ts"
   },
   "dependencies": {
     "amqplib": "^0.10.4",

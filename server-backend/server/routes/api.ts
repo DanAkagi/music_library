@@ -3,6 +3,15 @@ import fs from 'fs';
 import path from 'path';
 import archiver from 'archiver';
 import { getAllTracks } from '../services/track-repository';
+import {
+  getAllPlaylists,
+  createPlaylist,
+  renamePlaylist,
+  deletePlaylist,
+  addTrackToPlaylist,
+  removeTrackFromPlaylist,
+  reorderPlaylistTrack,
+} from '../services/playlist-repository';
 
 const router = Router();
 
@@ -88,6 +97,105 @@ router.get('/tracks', async (_req: Request, res: Response) => {
   try {
     const tracks = await getAllTracks();
     res.json({ tracks });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// GET /api/playlists
+router.get('/playlists', async (_req: Request, res: Response) => {
+  try {
+    const playlists = await getAllPlaylists();
+    res.json({ playlists });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// POST /api/playlists — body: { name, tracks: [{ filename }], criteria? }
+router.post('/playlists', async (req: Request, res: Response) => {
+  const { name, tracks, criteria } = req.body as {
+    name?: string;
+    tracks?: { filename: string }[];
+    criteria?: unknown;
+  };
+
+  if (!name?.trim() || !Array.isArray(tracks)) {
+    return res.status(400).json({ error: 'name and tracks array required' });
+  }
+
+  try {
+    const filenames = tracks.map((t) => t.filename).filter(Boolean);
+    const playlist = await createPlaylist(name.trim(), filenames, criteria as never);
+    res.status(201).json({ playlist });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// PATCH /api/playlists/:id — body: { name }
+router.patch('/playlists/:id', async (req: Request, res: Response) => {
+  const { name } = req.body as { name?: string };
+  if (!name?.trim()) return res.status(400).json({ error: 'name required' });
+
+  try {
+    const ok = await renamePlaylist(req.params.id, name.trim());
+    if (!ok) return res.status(404).json({ error: 'Playlist not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// DELETE /api/playlists/:id
+router.delete('/playlists/:id', async (req: Request, res: Response) => {
+  try {
+    const ok = await deletePlaylist(req.params.id);
+    if (!ok) return res.status(404).json({ error: 'Playlist not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// POST /api/playlists/:id/tracks — body: { filename }
+router.post('/playlists/:id/tracks', async (req: Request, res: Response) => {
+  const { filename } = req.body as { filename?: string };
+  if (!filename) return res.status(400).json({ error: 'filename required' });
+
+  try {
+    const ok = await addTrackToPlaylist(req.params.id, filename);
+    if (!ok) return res.status(404).json({ error: 'Could not add track' });
+    const playlists = await getAllPlaylists();
+    const playlist = playlists.find((p) => p.id === req.params.id);
+    res.json({ playlist });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// DELETE /api/playlists/:id/tracks/:filename
+router.delete('/playlists/:id/tracks/:filename', async (req: Request, res: Response) => {
+  try {
+    const ok = await removeTrackFromPlaylist(req.params.id, decodeURIComponent(req.params.filename));
+    if (!ok) return res.status(404).json({ error: 'Track not found in playlist' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// PATCH /api/playlists/:id/reorder — body: { fromIndex, toIndex }
+router.patch('/playlists/:id/reorder', async (req: Request, res: Response) => {
+  const { fromIndex, toIndex } = req.body as { fromIndex?: number; toIndex?: number };
+  if (typeof fromIndex !== 'number' || typeof toIndex !== 'number') {
+    return res.status(400).json({ error: 'fromIndex and toIndex required' });
+  }
+
+  try {
+    const ok = await reorderPlaylistTrack(req.params.id, fromIndex, toIndex);
+    if (!ok) return res.status(400).json({ error: 'Invalid reorder' });
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

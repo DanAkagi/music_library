@@ -183,6 +183,12 @@ const minDuration = ref<number | undefined>(undefined);
 const maxDuration = ref<number | undefined>(undefined);
 const combinationCount = ref(3);
 
+const toOptionalPositive = (value: number | undefined): number | undefined =>
+  value != null && Number.isFinite(value) && value > 0 ? value : undefined;
+
+const toOptionalYear = (value: number | undefined): number | undefined =>
+  value != null && Number.isFinite(value) ? value : undefined;
+
 const buildCriteria = (): PlaylistCriteria => {
   const incl = (entries: Entry[]) => entries.filter(e => e.mode === 'include' && e.value).map(e => e.value);
   const excl = (entries: Entry[]) => entries.filter(e => e.mode === 'exclude' && e.value).map(e => e.value);
@@ -192,10 +198,10 @@ const buildCriteria = (): PlaylistCriteria => {
     genres:             incl(criteriaMap.genres.entries),
     excludeGenres:      excl(criteriaMap.genres.entries),
     languages:          incl(criteriaMap.languages.entries),
-    yearMin:            yearMin.value || undefined,
-    yearMax:            yearMax.value || undefined,
-    minDurationMinutes: minDuration.value || undefined,
-    maxDurationMinutes: maxDuration.value || undefined,
+    yearMin:            toOptionalYear(yearMin.value),
+    yearMax:            toOptionalYear(yearMax.value),
+    minDurationMinutes: toOptionalPositive(minDuration.value),
+    maxDurationMinutes: toOptionalPositive(maxDuration.value),
   };
 };
 
@@ -234,11 +240,11 @@ const addTrack = (playlistIdx: number) => {
 const totalDuration = (tracks: Track[]) =>
   formatDuration(tracks.reduce((acc, t) => acc + (t.duration || 0), 0));
 
-const save = (idx: number) => {
+const save = async (idx: number) => {
   const tracks = generated.value?.[idx];
   const name = playlistNames.value[idx]?.trim();
   if (!tracks || !name) return;
-  playlistStore.createPlaylist(name, tracks, buildCriteria());
+  await playlistStore.createPlaylist(name, tracks, buildCriteria());
   playlistNames.value[idx] = '';
 };
 

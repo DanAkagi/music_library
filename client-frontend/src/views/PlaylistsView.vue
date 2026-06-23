@@ -103,8 +103,8 @@ const startEdit = (pl: Playlist) => {
   renameValue.value = pl.name;
 };
 
-const confirmRename = (id: string) => {
-  if (renameValue.value.trim()) playlistStore.renamePlaylist(id, renameValue.value.trim());
+const confirmRename = async (id: string) => {
+  if (renameValue.value.trim()) await playlistStore.renamePlaylist(id, renameValue.value.trim());
   editingId.value = null;
 };
 
@@ -130,11 +130,11 @@ const availableTracks = (pl: Playlist) => {
   return musicStore.tracks.filter((t) => !inPlaylist.has(t.filename));
 };
 
-const addTrack = (playlistId: string) => {
+const addTrack = async (playlistId: string) => {
   const filename = addTrackFilename.value[playlistId];
   const track = musicStore.tracks.find((t) => t.filename === filename);
   if (track) {
-    playlistStore.addTrackToPlaylist(playlistId, track);
+    await playlistStore.addTrackToPlaylist(playlistId, track);
     addTrackFilename.value[playlistId] = '';
   }
 };

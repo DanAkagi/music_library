@@ -8,25 +8,32 @@ import { QueueMessage, UpdateCheckerPayload } from '../config/types';
 dotenv.config();
 
 const MUSIC_PATH = process.env.MUSIC_PATH || '';
+
 // TIME_INTERVAL_UPDATE_CHECKER_SECONDS (prioritaire) ou TIME_INTERVAL_UPDATE_CHECKER en minutes
 const INTERVAL_SECONDS = parseInt(process.env.TIME_INTERVAL_UPDATE_CHECKER_SECONDS || '', 10);
 const TIME_INTERVAL = Number.isFinite(INTERVAL_SECONDS)
   ? INTERVAL_SECONDS * 1000
   : parseInt(process.env.TIME_INTERVAL_UPDATE_CHECKER || '5', 10) * 60 * 1000;
-
-// Scan all MP3s currently present in the directory.
 // No in-memory tracking: file-suppressor deletes processed files,
 // so anything still on disk at the next interval is genuinely pending.
-const scanForMp3Files = (): string[] => {
-  if (!MUSIC_PATH || !fs.existsSync(MUSIC_PATH)) {
-    logger.error(`Music path does not exist or is not set: "${MUSIC_PATH}"`);
+const scanForMp3Files = (dir: string = MUSIC_PATH): string[] => {
+  if (!dir || !fs.existsSync(dir)) {
+    if (dir === MUSIC_PATH) {
+      logger.error(`Music path does not exist or is not set: "${MUSIC_PATH}"`);
+    }
     return [];
   }
 
-  return fs
-    .readdirSync(MUSIC_PATH)
-    .filter((file) => path.extname(file).toLowerCase() === '.mp3')
-    .map((file) => path.join(MUSIC_PATH, file));
+  const results: string[] = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...scanForMp3Files(fullPath));
+    } else if (entry.isFile() && path.extname(entry.name).toLowerCase() === '.mp3') {
+      results.push(fullPath);
+    }
+  }
+  return results;
 };
 
 export const runUpdateChecker = async (): Promise<void> => {

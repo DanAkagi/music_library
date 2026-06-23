@@ -1,92 +1,88 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import type { Playlist, Track } from '@/services/types';
-
-const STORAGE_KEY = 'music_library_playlists';
-
-const loadFromStorage = (): Playlist[] => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
-};
-
-const saveToStorage = (playlists: Playlist[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(playlists));
-};
+import {
+  loadPlaylists,
+  createPlaylistApi,
+  renamePlaylistApi,
+  deletePlaylistApi,
+  addTrackToPlaylistApi,
+  removeTrackFromPlaylistApi,
+  reorderPlaylistTrackApi,
+  clearLegacyPlaylistStorage,
+} from '@/services/playlistService';
 
 export const usePlaylistStore = defineStore('playlists', () => {
-  const playlists = ref<Playlist[]>(loadFromStorage());
+  const playlists = ref<Playlist[]>([]);
+  const isLoading = ref(false);
+  const error = ref<string | null>(null);
 
-  const save = () => saveToStorage(playlists.value);
+  const fetchPlaylists = async () => {
+    isLoading.value = true;
+    error.value = null;
+    try {
+      playlists.value = await loadPlaylists();
+      clearLegacyPlaylistStorage();
+    } catch (e) {
+      error.value = 'Impossible de charger les playlists.';
+      console.error(e);
+    } finally {
+      isLoading.value = false;
+    }
+  };
 
-  const createPlaylist = (name: string, tracks: Track[], criteria?: Playlist['criteria']): Playlist => {
-    const playlist: Playlist = {
-      id: crypto.randomUUID(),
-      name,
-      tracks,
-      createdAt: new Date().toISOString(),
-      criteria,
-    };
-    playlists.value.push(playlist);
-    save();
+  const createPlaylist = async (
+    name: string,
+    tracks: Track[],
+    criteria?: Playlist['criteria']
+  ): Promise<Playlist> => {
+    const playlist = await createPlaylistApi(name, tracks, criteria);
+    playlists.value.unshift(playlist);
     return playlist;
   };
 
-  const renamePlaylist = (id: string, newName: string) => {
+  const renamePlaylist = async (id: string, newName: string) => {
+    await renamePlaylistApi(id, newName);
     const pl = playlists.value.find((p) => p.id === id);
-    if (pl) { pl.name = newName; save(); }
+    if (pl) pl.name = newName;
   };
 
-  const deletePlaylist = (id: string) => {
+  const deletePlaylist = async (id: string) => {
+    await deletePlaylistApi(id);
     playlists.value = playlists.value.filter((p) => p.id !== id);
-    save();
   };
 
-  const addTrackToPlaylist = (playlistId: string, track: Track) => {
+  const addTrackToPlaylist = async (playlistId: string, track: Track) => {
+    const updated = await addTrackToPlaylistApi(playlistId, track);
+    const idx = playlists.value.findIndex((p) => p.id === playlistId);
+    if (idx !== -1) playlists.value[idx] = updated;
+  };
+
+  const removeTrackFromPlaylist = async (playlistId: string, filename: string) => {
+    await removeTrackFromPlaylistApi(playlistId, filename);
     const pl = playlists.value.find((p) => p.id === playlistId);
-    if (pl && !pl.tracks.some((t) => t.filename === track.filename)) {
-      pl.tracks.push(track);
-      save();
-    }
+    if (pl) pl.tracks = pl.tracks.filter((t) => t.filename !== filename);
   };
 
-  const removeTrackFromPlaylist = (playlistId: string, filename: string) => {
-    const pl = playlists.value.find((p) => p.id === playlistId);
-    if (pl) {
-      pl.tracks = pl.tracks.filter((t) => t.filename !== filename);
-      save();
-    }
-  };
-
-  const replaceTrackInPlaylist = (playlistId: string, oldFilename: string, newTrack: Track) => {
-    const pl = playlists.value.find((p) => p.id === playlistId);
-    if (pl) {
-      const idx = pl.tracks.findIndex((t) => t.filename === oldFilename);
-      if (idx !== -1) pl.tracks[idx] = newTrack;
-      save();
-    }
-  };
-
-  const reorderTrack = (playlistId: string, fromIndex: number, toIndex: number) => {
+  const reorderTrack = async (playlistId: string, fromIndex: number, toIndex: number) => {
+    await reorderPlaylistTrackApi(playlistId, fromIndex, toIndex);
     const pl = playlists.value.find((p) => p.id === playlistId);
     if (pl) {
       const [moved] = pl.tracks.splice(fromIndex, 1);
       pl.tracks.splice(toIndex, 0, moved);
-      save();
     }
   };
 
   return {
     playlists,
+    isLoading,
+    error,
+    fetchPlaylists,
     createPlaylist,
     renamePlaylist,
     deletePlaylist,
     addTrackToPlaylist,
     removeTrackFromPlaylist,
-    replaceTrackInPlaylist,
     reorderTrack,
   };
 });

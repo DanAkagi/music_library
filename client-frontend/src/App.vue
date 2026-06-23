@@ -45,12 +45,15 @@
 import { onMounted } from 'vue';
 import { RouterLink, RouterView } from 'vue-router';
 import { useMusicStore } from '@/stores/music';
+import { usePlaylistStore } from '@/stores/playlists';
 import MusicPlayer from '@/components/MusicPlayer.vue';
 
 const musicStore = useMusicStore();
+const playlistStore = usePlaylistStore();
 
 onMounted(() => {
   musicStore.fetchTracks();
+  playlistStore.fetchPlaylists();
 });
 </script>
 
