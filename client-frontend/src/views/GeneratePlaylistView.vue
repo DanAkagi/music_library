@@ -12,58 +12,43 @@
         </button>
       </header>
 
-      <div class="criteria-grid">
-        <div class="criteria-group" v-for="(cat, key) in criteriaMap" :key="key">
-          <h4 class="group-label">{{ cat.label }}</h4>
-          <div class="criterion-row" v-for="(entry, i) in cat.entries" :key="i">
-            <select v-model="entry.mode" class="select mode-select">
-              <option value="include">Inclure</option>
-              <option value="exclude">Exclure</option>
-            </select>
-            <select v-model="entry.value" class="select value-select">
-              <option value="">Choisir…</option>
-              <option v-for="opt in cat.options" :key="opt" :value="opt">{{ opt }}</option>
-            </select>
-            <button type="button" class="btn-icon" @click="cat.entries.splice(i, 1)" title="Supprimer">×</button>
-          </div>
-          <button type="button" class="btn-add" @click="cat.entries.push({ mode: 'include', value: '' })">
-            + Ajouter {{ cat.label.toLowerCase() }}
-          </button>
-        </div>
-
-        <div class="criteria-group criteria-group--compact">
-          <h4 class="group-label">Période</h4>
-          <div class="inline-fields">
-            <div class="mini-field">
-              <label>Année min</label>
-              <input type="number" class="input" v-model.number="yearMin" placeholder="2000" />
+      <div class="criteria-layout">
+        <div class="criteria-filters">
+          <div class="criteria-group" v-for="(cat, key) in criteriaMap" :key="key">
+            <h4 class="group-label">{{ cat.label }}</h4>
+            <div class="criterion-row" v-for="(entry, i) in cat.entries" :key="i">
+              <select v-model="entry.mode" class="select mode-select">
+                <option value="include">Inclure</option>
+                <option value="exclude">Exclure</option>
+              </select>
+              <select v-model="entry.value" class="select value-select">
+                <option value="">Choisir…</option>
+                <option v-for="opt in cat.options" :key="opt" :value="opt">{{ opt }}</option>
+              </select>
+              <button type="button" class="btn-icon" @click="cat.entries.splice(i, 1)" title="Supprimer">×</button>
             </div>
-            <div class="mini-field">
-              <label>Année max</label>
-              <input type="number" class="input" v-model.number="yearMax" placeholder="2024" />
-            </div>
+            <button type="button" class="btn-add" @click="cat.entries.push({ mode: 'include', value: '' })">
+              + Ajouter {{ cat.label.toLowerCase() }}
+            </button>
           </div>
         </div>
 
-        <div class="criteria-group criteria-group--compact">
-          <h4 class="group-label">Durée (minutes)</h4>
-          <div class="inline-fields">
+        <div class="criteria-options">
+          <div class="criteria-group criteria-group--compact">
+            <h4 class="group-label">Période</h4>
             <div class="mini-field">
-              <label>Minimum</label>
-              <input type="number" class="input" v-model.number="minDuration" placeholder="20" />
-            </div>
-            <div class="mini-field">
-              <label>Maximum</label>
-              <input type="number" class="input" v-model.number="maxDuration" placeholder="60" />
+              <label>Année</label>
+              <input type="number" class="input" v-model.number="year" placeholder="2000" />
             </div>
           </div>
-        </div>
 
-        <div class="criteria-group criteria-group--compact">
-          <h4 class="group-label">Playlists</h4>
-          <div class="mini-field">
-            <label>Nombre à générer</label>
-            <input type="number" class="input" v-model.number="combinationCount" min="1" max="10" />
+          <div class="criteria-group criteria-group--compact">
+            <h4 class="group-label">Durée (minutes)</h4>
+            <div class="mini-field">
+              <label>Durée exacte (minutes)</label>
+              <input type="number" class="input" v-model.number="durationMinutes" min="0" placeholder="2" />
+              <p class="field-hint">Ex. 2 → titres de 2:00 à 2:59 (pas 1:xx ni 3:xx).</p>
+            </div>
           </div>
         </div>
       </div>
@@ -163,7 +148,7 @@ import { ref, reactive, computed } from 'vue';
 import { useMusicStore } from '@/stores/music';
 import { usePlaylistStore } from '@/stores/playlists';
 import TrackItem from '@/components/TrackItem.vue';
-import { generatePlaylists } from '@/services/playlistGenerator';
+import { generatePlaylists, normalizeCriteria } from '@/services/playlistGenerator';
 import { formatDuration } from '@/services/trackService';
 import { downloadTracksAsZip } from '@/services/downloadService';
 import type { Track, PlaylistCriteria } from '@/services/types';
@@ -175,36 +160,37 @@ const allTracks = computed(() => musicStore.tracks);
 
 interface Entry { mode: 'include' | 'exclude'; value: string; }
 const criteriaMap = reactive({
-  artists:   { label: 'Artiste',  entries: [] as Entry[], options: computed(() => musicStore.allArtists) },
-  genres:    { label: 'Genre',    entries: [] as Entry[], options: computed(() => musicStore.allGenres) },
-  languages: { label: 'Langue',   entries: [] as Entry[], options: computed(() => musicStore.allLanguages) },
+  artists: { label: 'Artiste', entries: [] as Entry[], options: computed(() => musicStore.allArtists) },
+  genres:  { label: 'Genre',   entries: [] as Entry[], options: computed(() => musicStore.allGenres) },
 });
-const yearMin = ref<number | undefined>(undefined);
-const yearMax = ref<number | undefined>(undefined);
-const minDuration = ref<number | undefined>(undefined);
-const maxDuration = ref<number | undefined>(undefined);
-const combinationCount = ref(3);
+const year = ref<number | undefined>(undefined);
+const durationMinutes = ref<number | undefined>(undefined);
 
-const toOptionalPositive = (value: number | undefined): number | undefined =>
-  value != null && Number.isFinite(value) && value > 0 ? value : undefined;
+const DEFAULT_COMBINATION_COUNT = 3;
 
-const toOptionalYear = (value: number | undefined): number | undefined =>
-  value != null && Number.isFinite(value) ? value : undefined;
+const toOptionalYear = (value: number | undefined): number | undefined => {
+  if (value == null || !Number.isFinite(value)) return undefined;
+  const year = Math.trunc(value);
+  return year >= 1 ? year : undefined;
+};
+
+const toOptionalDurationMinutes = (value: number | undefined): number | undefined => {
+  if (value == null || !Number.isFinite(value)) return undefined;
+  const minutes = Math.trunc(value);
+  return minutes >= 0 ? minutes : undefined;
+};
 
 const buildCriteria = (): PlaylistCriteria => {
   const incl = (entries: Entry[]) => entries.filter(e => e.mode === 'include' && e.value).map(e => e.value);
   const excl = (entries: Entry[]) => entries.filter(e => e.mode === 'exclude' && e.value).map(e => e.value);
-  return {
-    artists:            incl(criteriaMap.artists.entries),
-    excludeArtists:     excl(criteriaMap.artists.entries),
-    genres:             incl(criteriaMap.genres.entries),
-    excludeGenres:      excl(criteriaMap.genres.entries),
-    languages:          incl(criteriaMap.languages.entries),
-    yearMin:            toOptionalYear(yearMin.value),
-    yearMax:            toOptionalYear(yearMax.value),
-    minDurationMinutes: toOptionalPositive(minDuration.value),
-    maxDurationMinutes: toOptionalPositive(maxDuration.value),
-  };
+  return normalizeCriteria({
+    artists:          incl(criteriaMap.artists.entries),
+    excludeArtists:   excl(criteriaMap.artists.entries),
+    genres:           incl(criteriaMap.genres.entries),
+    excludeGenres:    excl(criteriaMap.genres.entries),
+    year:             toOptionalYear(year.value),
+    durationMinutes:  toOptionalDurationMinutes(durationMinutes.value),
+  });
 };
 
 const generated = ref<Track[][] | null>(null);
@@ -212,7 +198,7 @@ const playlistNames = ref<string[]>([]);
 const addFilename = ref<Record<number, string>>({});
 
 const generate = () => {
-  const results = generatePlaylists(musicStore.tracks, buildCriteria(), combinationCount.value || 3);
+  const results = generatePlaylists(musicStore.tracks, buildCriteria(), DEFAULT_COMBINATION_COUNT);
   generated.value = results.map(pl => pl.map(t => ({ ...t })));
   playlistNames.value = results.map((_, i) => `Playlist ${i + 1}`);
   addFilename.value = {};
@@ -303,19 +289,30 @@ const downloadOne = (track: Track) => {
   white-space: nowrap;
 }
 
-.criteria-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.criteria-layout {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
   padding: 1.25rem 1.5rem;
 }
 
-@media (max-width: 900px) {
-  .criteria-grid { grid-template-columns: 1fr 1fr; }
+.criteria-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
 }
 
-@media (max-width: 600px) {
-  .criteria-grid { grid-template-columns: 1fr; }
+.criteria-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .criteria-filters,
+  .criteria-options {
+    grid-template-columns: 1fr;
+  }
 }
 
 .criteria-group {
@@ -407,6 +404,13 @@ const downloadOne = (track: Track) => {
 
 .mini-field .input {
   width: 100%;
+}
+
+.field-hint {
+  margin: 0.4rem 0 0;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.35;
 }
 
 /* ── Results ── */

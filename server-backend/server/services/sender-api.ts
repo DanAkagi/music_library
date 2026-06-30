@@ -8,6 +8,7 @@ import {
   FileSuppressorPayload,
 } from '../config/types';
 import { getExistingFilenames, insertTrack } from './track-repository';
+import { isArtistBlacklisted, loadArtistBlacklist } from './artist-blacklist';
 
 const FRONTEND_MUSIC_PATH = path.resolve(
   process.env.FRONTEND_MUSIC_OUTPUT_PATH || '../client-frontend/public/music'
@@ -38,12 +39,25 @@ export const startSenderApi = async (): Promise<void> => {
     const { files } = payload.data;
     logger.info(`Received ${files.length} file(s) to send to frontend.`);
 
+    const blacklist = loadArtistBlacklist();
+    if (blacklist.size > 0) {
+      logger.info(`Artist blacklist loaded (${blacklist.size} name(s)).`);
+    }
+
     const existingFilenames = await getExistingFilenames();
     const processedFiles: string[] = [];
 
     for (const meta of files) {
       logger.info(`  [BEGIN] Processing: ${meta.filename}`);
       try {
+        if (isArtistBlacklisted(meta, blacklist)) {
+          const artist = meta.artist || meta.albumartist || '?';
+          logger.warn(
+            `  [BLACKLIST] ${meta.filename} — artist "${artist}" blocked, file stays in deposit folder`
+          );
+          continue;
+        }
+
         const destPath = path.join(FRONTEND_MUSIC_PATH, meta.filename);
         fs.copyFileSync(meta.filepath, destPath);
         logger.info(`  [IN PROGRESS] ${meta.filename} → copied to frontend music folder`);

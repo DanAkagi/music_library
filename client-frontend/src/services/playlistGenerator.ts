@@ -5,46 +5,71 @@ const getDurationSec = (track: Track): number => {
   return typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : 0;
 };
 
-const sumDuration = (tracks: Track[]): number =>
-  tracks.reduce((acc, t) => acc + getDurationSec(t), 0);
+/** Minutes entières de la piste (2:50 → 2). */
+const getTrackDurationMinutes = (track: Track): number =>
+  Math.floor(getDurationSec(track) / 60);
+
+export function normalizeCriteria(criteria: PlaylistCriteria): PlaylistCriteria {
+  const c = { ...criteria };
+
+  if (c.year != null) {
+    const y = Math.trunc(c.year);
+    c.year = Number.isFinite(y) && y >= 1 ? y : undefined;
+  }
+
+  if (c.durationMinutes != null) {
+    const m = Math.trunc(c.durationMinutes);
+    c.durationMinutes = Number.isFinite(m) && m >= 0 ? m : undefined;
+  }
+
+  return c;
+}
 
 /** Apply all criteria filters to a track list. Returns matching tracks. */
 export function applyFilters(tracks: Track[], criteria: PlaylistCriteria): Track[] {
+  const c = normalizeCriteria(criteria);
+
   return tracks.filter((t) => {
-    if (criteria.artists?.length) {
-      const match = criteria.artists.some((a) =>
+    if (c.artists?.length) {
+      const match = c.artists.some((a) =>
         t.artist?.toLowerCase().includes(a.toLowerCase())
       );
       if (!match) return false;
     }
-    if (criteria.genres?.length) {
-      const match = criteria.genres.some((g) =>
+    if (c.genres?.length) {
+      const match = c.genres.some((g) =>
         t.genre?.toLowerCase().includes(g.toLowerCase())
       );
       if (!match) return false;
     }
-    if (criteria.languages?.length) {
-      const match = criteria.languages.some((l) =>
+    if (c.languages?.length) {
+      const match = c.languages.some((l) =>
         t.language?.toLowerCase() === l.toLowerCase()
       );
       if (!match) return false;
     }
 
-    if (criteria.excludeArtists?.length) {
-      const excluded = criteria.excludeArtists.some((a) =>
+    if (c.excludeArtists?.length) {
+      const excluded = c.excludeArtists.some((a) =>
         t.artist?.toLowerCase().includes(a.toLowerCase())
       );
       if (excluded) return false;
     }
-    if (criteria.excludeGenres?.length) {
-      const excluded = criteria.excludeGenres.some((g) =>
+    if (c.excludeGenres?.length) {
+      const excluded = c.excludeGenres.some((g) =>
         t.genre?.toLowerCase().includes(g.toLowerCase())
       );
       if (excluded) return false;
     }
 
-    if (criteria.yearMin !== undefined && t.year !== undefined && t.year < criteria.yearMin) return false;
-    if (criteria.yearMax !== undefined && t.year !== undefined && t.year > criteria.yearMax) return false;
+    if (c.year !== undefined) {
+      if (t.year === undefined || t.year !== c.year) return false;
+    }
+
+    if (c.durationMinutes !== undefined) {
+      if (getDurationSec(t) <= 0) return false;
+      if (getTrackDurationMinutes(t) !== c.durationMinutes) return false;
+    }
 
     return true;
   });
@@ -59,86 +84,13 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-/** Remplit une playlist sans dépasser maxSec (ordre des morceaux conservé). */
-const packUpToMax = (ordered: Track[], maxSec: number): Track[] => {
-  const picked: Track[] = [];
-  let total = 0;
-  for (const track of ordered) {
-    const d = getDurationSec(track);
-    if (d > 0 && total + d <= maxSec) {
-      picked.push(track);
-      total += d;
-    }
-  }
-  return picked;
-};
-
-/** Construit une playlist d'au moins minSec en ajoutant des morceaux dans l'ordre donné. */
-const packToMin = (ordered: Track[], minSec: number): Track[] => {
-  const picked: Track[] = [];
-  let total = 0;
-  for (const track of ordered) {
-    const d = getDurationSec(track);
-    if (d <= 0) continue;
-    picked.push(track);
-    total += d;
-    if (total >= minSec) break;
-  }
-  return total >= minSec ? picked : [];
-};
-
-/**
- * Durée totale de la playlist en secondes :
- * - max seul → remplir jusqu'au plafond
- * - min seul → sous-ensemble d'au moins min minutes
- * - min + max → entre les deux bornes
- */
-function buildPlaylist(candidates: Track[], criteria: PlaylistCriteria): Track[] {
-  const minSec =
-    criteria.minDurationMinutes != null && criteria.minDurationMinutes > 0
-      ? criteria.minDurationMinutes * 60
-      : 0;
-  const hasMax =
-    criteria.maxDurationMinutes != null && criteria.maxDurationMinutes > 0;
-  const maxSec = hasMax ? criteria.maxDurationMinutes! * 60 : Infinity;
-
-  const needsDuration = minSec > 0 || hasMax;
-  const pool = needsDuration
-    ? candidates.filter((t) => getDurationSec(t) > 0)
-    : candidates;
-
-  if (pool.length === 0) return needsDuration ? [] : candidates;
-  if (!needsDuration) return pool;
-
-  // Pool insuffisant pour le minimum global
-  if (minSec > 0 && sumDuration(pool) < minSec) return [];
-
-  let picked: Track[] = [];
-
-  if (hasMax) {
-    // Essai 1 : ordre aléatoire (déjà mélangé en amont)
-    picked = packUpToMax(pool, maxSec);
-
-    // Essai 2 : morceaux les plus longs d'abord → mieux remplir le max / atteindre le min
-    if (sumDuration(picked) < minSec) {
-      const byLongest = [...pool].sort((a, b) => getDurationSec(b) - getDurationSec(a));
-      const alt = packUpToMax(byLongest, maxSec);
-      if (sumDuration(alt) > sumDuration(picked)) picked = alt;
-    }
-  } else if (minSec > 0) {
-    picked = packToMin(pool, minSec);
-  }
-
-  if (sumDuration(picked) < minSec) return [];
-  return picked;
-}
-
 export function generatePlaylists(
   tracks: Track[],
   criteria: PlaylistCriteria,
   count: number = 3
 ): Track[][] {
-  const pool = applyFilters(tracks, criteria);
+  const normalized = normalizeCriteria(criteria);
+  const pool = applyFilters(tracks, normalized);
   if (pool.length === 0) return [];
 
   const results: Track[][] = [];
@@ -148,8 +100,7 @@ export function generatePlaylists(
 
   while (results.length < count && attempts < MAX_ATTEMPTS) {
     attempts++;
-    const shuffled = shuffle(pool);
-    const playlist = buildPlaylist(shuffled, criteria);
+    const playlist = shuffle(pool);
     if (playlist.length === 0) continue;
 
     const sig = [...playlist].map((t) => t.filename).sort().join('|');

@@ -20,10 +20,8 @@ export interface PlaylistCriteria {
   genres?: string[];
   excludeGenres?: string[];
   languages?: string[];
-  yearMin?: number;
-  yearMax?: number;
-  minDurationMinutes?: number;
-  maxDurationMinutes?: number;
+  year?: number;
+  durationMinutes?: number;
   combinationCount?: number;
 }
 
