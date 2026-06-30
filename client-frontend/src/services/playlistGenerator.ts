@@ -161,6 +161,3 @@ export function generatePlaylists(
 
   return results;
 }
-
-/** Durée totale en secondes (utilitaire UI / tests). */
-export const getPlaylistDurationSec = (tracks: Track[]): number => sumDuration(tracks);

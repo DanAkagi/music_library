@@ -67,7 +67,7 @@ export const insertTrack = async (meta: MusicFileMetadata): Promise<boolean> => 
       sample_rate = VALUES(sample_rate)`,
     [
       normalized.filename,
-      normalized.title ?? normalized.filename,
+      normalized.title ?? null,
       normalized.artist ?? null,
       normalized.album ?? null,
       normalized.genre ?? null,

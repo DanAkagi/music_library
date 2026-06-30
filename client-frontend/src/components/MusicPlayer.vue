@@ -1,9 +1,16 @@
 <template>
-  <div class="player" v-if="musicStore.currentTrack">
-    <audio ref="audioEl" @ended="onEnded" @timeupdate="onTimeUpdate" @loadedmetadata="onLoaded" @error="onError" />
+  <!-- Audio toujours monté : évite que loadTrack() s'exécute avant que ref soit prête -->
+  <audio
+    ref="audioEl"
+    preload="auto"
+    class="hidden-audio"
+    @ended="onEnded"
+    @timeupdate="onTimeUpdate"
+    @loadedmetadata="onLoaded"
+  />
 
+  <div class="player" v-if="musicStore.currentTrack">
     <div class="player-inner">
-      <!-- Colonne gauche : piste en cours -->
       <div class="col col-track">
         <div class="player-dot" aria-hidden="true" />
         <div class="player-info">
@@ -12,10 +19,10 @@
             {{ musicStore.currentTrack.artist || 'Artiste inconnu' }}
             <template v-if="musicStore.currentTrack.album"> · {{ musicStore.currentTrack.album }}</template>
           </div>
+          <div v-if="loadError" class="player-error">{{ loadError }}</div>
         </div>
       </div>
 
-      <!-- Colonne centre : contrôles + progression -->
       <div class="col col-center">
         <div class="player-controls">
           <button type="button" class="ctrl" @click="musicStore.playPrev()" title="Précédent">⏮</button>
@@ -31,7 +38,6 @@
         </div>
       </div>
 
-      <!-- Colonne droite : volume -->
       <div class="col col-volume">
         <button type="button" class="vol-toggle" @click="toggleMute" :title="volume > 0 ? 'Couper le son' : 'Activer le son'">
           {{ volumeIcon }}
@@ -52,16 +58,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, computed } from 'vue';
+import { ref, watch, onMounted, computed, nextTick } from 'vue';
 import { useMusicStore } from '@/stores/music';
 import { formatDuration } from '@/services/trackService';
+import { getTrackAudioUrl } from '@/services/audioService';
+import type { Track } from '@/services/types';
 
 const musicStore = useMusicStore();
 const audioEl = ref<HTMLAudioElement | null>(null);
 const currentTime = ref(0);
 const duration = ref(0);
 const volume = ref(1);
-const MUSIC_PATH = import.meta.env.VITE_MUSIC_PATH || '/music';
+const loadError = ref<string | null>(null);
 
 const volumeIcon = computed(() => {
   if (volume.value === 0) return '🔇';
@@ -70,19 +78,22 @@ const volumeIcon = computed(() => {
 });
 
 let playPromise: Promise<void> | null = null;
+let loadToken = 0;
 
 const safePlay = async () => {
   const el = audioEl.value;
-  if (!el) return;
+  if (!el?.src) return;
   if (playPromise) {
     try { await playPromise; } catch { /* aborted */ }
   }
   playPromise = el.play();
   try {
     await playPromise;
+    loadError.value = null;
   } catch (e: unknown) {
     if (e instanceof DOMException && e.name !== 'AbortError') {
       console.error('Play error:', e);
+      loadError.value = 'Lecture impossible';
     }
   } finally {
     playPromise = null;
@@ -91,34 +102,83 @@ const safePlay = async () => {
 
 const safePause = () => { audioEl.value?.pause(); };
 
-watch(
-  () => musicStore.currentTrack,
-  (newTrack) => {
-    if (!newTrack || !audioEl.value) return;
-    currentTime.value = 0;
-    duration.value = 0;
-    const encoded = newTrack.filename.split('/').map(encodeURIComponent).join('/');
-    audioEl.value.src = `${MUSIC_PATH}/${encoded}`;
-    audioEl.value.load();
-    audioEl.value.addEventListener('canplay', () => {
-      if (musicStore.isPlaying) safePlay();
-    }, { once: true });
+const waitForCanPlay = (el: HTMLAudioElement, token: number): Promise<void> =>
+  new Promise((resolve, reject) => {
+    if (token !== loadToken) {
+      reject(new Error('cancelled'));
+      return;
+    }
+    if (el.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+      resolve();
+      return;
+    }
+    const onReady = () => { cleanup(); resolve(); };
+    const onFail = () => { cleanup(); reject(new Error('audio error')); };
+    const cleanup = () => {
+      el.removeEventListener('canplay', onReady);
+      el.removeEventListener('error', onFail);
+    };
+    el.addEventListener('canplay', onReady, { once: true });
+    el.addEventListener('error', onFail, { once: true });
+  });
+
+const loadTrack = async (track: Track, shouldPlay: boolean) => {
+  const el = audioEl.value;
+  if (!el) return;
+
+  const token = ++loadToken;
+  safePause();
+  currentTime.value = 0;
+  duration.value = track.duration ?? 0;
+  loadError.value = null;
+
+  el.src = getTrackAudioUrl(track.filename);
+  el.load();
+
+  try {
+    await waitForCanPlay(el, token);
+    if (token !== loadToken) return;
+    duration.value = el.duration || track.duration || 0;
+    if (shouldPlay) await safePlay();
+  } catch {
+    if (token !== loadToken) return;
+    loadError.value = `Fichier introuvable : ${track.title}`;
+    console.error('Audio load error:', track.filename);
   }
-);
+};
 
 watch(
-  () => musicStore.isPlaying,
-  (playing) => {
-    if (!audioEl.value?.src) return;
-    if (playing) safePlay();
-    else safePause();
-  }
+  () => ({
+    filename: musicStore.currentTrack?.filename,
+    playing: musicStore.isPlaying,
+  }),
+  async (state, prev) => {
+    await nextTick();
+    const track = musicStore.currentTrack;
+    if (!track) {
+      safePause();
+      return;
+    }
+
+    const trackChanged = state.filename !== prev?.filename;
+
+    if (trackChanged) {
+      await loadTrack(track, state.playing);
+      return;
+    }
+
+    if (!state.playing) safePause();
+    else await safePlay();
+  },
+  { flush: 'post' }
 );
 
 const onTimeUpdate = () => { currentTime.value = audioEl.value?.currentTime || 0; };
-const onLoaded = () => { duration.value = audioEl.value?.duration || 0; };
+const onLoaded = () => {
+  const d = audioEl.value?.duration;
+  if (d && Number.isFinite(d)) duration.value = d;
+};
 const onEnded = () => { musicStore.playNext(); };
-const onError = () => { console.error('Audio error:', musicStore.currentTrack?.filename); };
 const togglePlay = () => { musicStore.togglePlay(); };
 const seek = (e: Event) => {
   const val = parseFloat((e.target as HTMLInputElement).value);
@@ -141,6 +201,14 @@ onMounted(() => { if (audioEl.value) audioEl.value.volume = volume.value; });
 </script>
 
 <style scoped>
+.hidden-audio {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .player {
   position: fixed;
   bottom: 1.25rem;
@@ -206,6 +274,12 @@ onMounted(() => { if (audioEl.value) audioEl.value.volume = volume.value; });
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.player-error {
+  font-size: 0.7rem;
+  color: var(--danger, #dc2626);
+  margin-top: 0.15rem;
 }
 
 .col-center {

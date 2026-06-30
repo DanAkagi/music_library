@@ -1,7 +1,7 @@
 import { randomUUID } from 'crypto';
 import { RowDataPacket, ResultSetHeader, PoolConnection } from 'mysql2/promise';
 import { getPool } from '../config/database';
-import type { PlaylistCriteria } from '../config/playlist-types';
+import type { PlaylistCriteria } from '../config/types';
 
 export interface PlaylistRow {
   id: string;

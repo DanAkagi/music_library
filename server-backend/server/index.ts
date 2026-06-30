@@ -16,7 +16,10 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 const app = express();
 
-app.use(cors({ origin: FRONTEND_URL }));
+app.use(cors({
+  origin: FRONTEND_URL,
+  exposedHeaders: ['Content-Range', 'Accept-Ranges', 'Content-Length'],
+}));
 app.use(express.json());
 app.use('/api', apiRouter);
 

@@ -20,11 +20,6 @@ export interface Playlist {
   criteria?: PlaylistCriteria;
 }
 
-export interface CriterionGroup {
-  values: string[];
-  mode: 'include' | 'exclude';
-}
-
 export interface PlaylistCriteria {
   // include/exclude per category
   artists?: string[];

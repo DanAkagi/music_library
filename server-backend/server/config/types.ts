@@ -3,15 +3,28 @@ export interface MusicFileMetadata {
   filepath: string;
   title?: string;
   artist?: string;
+  albumartist?: string;
   album?: string;
   genre?: string;
   year?: number;
-  duration?: number; // seconds
+  duration?: number;
   trackNumber?: number;
   language?: string;
   bitrate?: number;
   sampleRate?: number;
-  size?: number; // bytes
+}
+
+export interface PlaylistCriteria {
+  artists?: string[];
+  excludeArtists?: string[];
+  genres?: string[];
+  excludeGenres?: string[];
+  languages?: string[];
+  yearMin?: number;
+  yearMax?: number;
+  minDurationMinutes?: number;
+  maxDurationMinutes?: number;
+  combinationCount?: number;
 }
 
 export interface QueueMessage<T = unknown> {
@@ -26,8 +39,6 @@ export type UpdateCheckerPayload = {
 export type MetaDataPayload = {
   files: MusicFileMetadata[];
 };
-
-export type SenderApiPayload = MetaDataPayload;
 
 export type FileSuppressorPayload = {
   processedFiles: string[]; // absolute paths to delete

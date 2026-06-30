@@ -55,8 +55,6 @@ const displayAlbum = computed(() => {
   if (!album) return undefined;
   const artist = props.track.artist?.trim().toLowerCase();
   if (artist && album.toLowerCase() === artist) return undefined;
-  const title = props.track.title?.trim().toLowerCase();
-  if (title && album.toLowerCase() === title) return undefined;
   return album;
 });
 

@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import archiver from 'archiver';
 import { getAllTracks } from '../services/track-repository';
 import {
   getAllPlaylists,
@@ -19,22 +18,20 @@ const FRONTEND_MUSIC_PATH = path.resolve(
   process.env.FRONTEND_MUSIC_OUTPUT_PATH || '../client-frontend/public/music'
 );
 
-// GET /api/music — list all available mp3 files
-router.get('/music', (_req: Request, res: Response) => {
-  try {
-    if (!fs.existsSync(FRONTEND_MUSIC_PATH)) {
-      return res.json({ files: [] });
-    }
-    const files = fs.readdirSync(FRONTEND_MUSIC_PATH).filter((f) => f.endsWith('.mp3'));
-    res.json({ files });
-  } catch (err) {
-    res.status(500).json({ error: (err as Error).message });
-  }
-});
-
-// GET /api/music/stream/:filename — stream a single mp3
+// GET /api/music/stream/:filename — stream a single mp3 (Range / seeking)
 router.get('/music/stream/:filename', (req: Request, res: Response) => {
-  const { filename } = req.params;
+  const raw = req.params.filename;
+  let filename: string;
+  try {
+    filename = decodeURIComponent(raw);
+  } catch {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+
+  if (!filename || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+
   const filePath = path.join(FRONTEND_MUSIC_PATH, filename);
 
   if (!fs.existsSync(filePath)) {
@@ -61,35 +58,10 @@ router.get('/music/stream/:filename', (req: Request, res: Response) => {
     res.writeHead(200, {
       'Content-Length': stat.size,
       'Content-Type': 'audio/mpeg',
+      'Accept-Ranges': 'bytes',
     });
     fs.createReadStream(filePath).pipe(res);
   }
-});
-
-// POST /api/music/download — download a zip of selected files
-// Body: { filenames: string[] }
-router.post('/music/download', (req: Request, res: Response) => {
-  const { filenames }: { filenames: string[] } = req.body;
-
-  if (!Array.isArray(filenames) || filenames.length === 0) {
-    return res.status(400).json({ error: 'filenames array required' });
-  }
-
-  res.setHeader('Content-Type', 'application/zip');
-  res.setHeader('Content-Disposition', 'attachment; filename="music.zip"');
-
-  const archive = archiver('zip', { zlib: { level: 6 } });
-  archive.on('error', (err) => res.status(500).send({ error: err.message }));
-  archive.pipe(res);
-
-  for (const filename of filenames) {
-    const filePath = path.join(FRONTEND_MUSIC_PATH, filename);
-    if (fs.existsSync(filePath)) {
-      archive.file(filePath, { name: filename });
-    }
-  }
-
-  archive.finalize();
 });
 
 // GET /api/tracks — all track metadata from MySQL
