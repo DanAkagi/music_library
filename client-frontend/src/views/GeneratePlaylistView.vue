@@ -11,8 +11,8 @@
           <label>{{ cat.label }}</label>
           <div class="criterion-row" v-for="(entry, i) in cat.entries" :key="i">
             <select v-model="entry.mode" class="mode-select">
-              <option value="include"><i class="bi bi-check-circle-fill"></i> inclure</option>
-              <option value="exclude"><i class="bi bi-x-circle-fill"></i> exclure</option>
+              <option value="include">inclure</option>
+              <option value="exclude">exclure</option>
             </select>
             <select v-model="entry.value" class="value-select">
               <option value="">-- choisir --</option>
@@ -72,7 +72,7 @@
                     @change="(e) => replaceTrack(idx, tIdx, (e.target as HTMLSelectElement).value)"
                     title="Remplacer par..."
                   >
-                    <option value=""><i class="bi bi-arrow-left-right"></i></option>
+                    <option value=""></option>
                     <option
                       v-for="t in allTracks.filter(t => !playlist.some(p => p.filename === t.filename))"
                       :key="t.filename"

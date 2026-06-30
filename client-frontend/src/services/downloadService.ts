@@ -1,13 +1,13 @@
 import JSZip from 'jszip';
 
-const MUSIC_PATH = import.meta.env.VITE_MUSIC_PATH || '/music';
+const API_URL = import.meta.env.VITE_URL_SERVER || 'http://localhost:3000';
 
 export async function downloadTracksAsZip(filenames: string[], zipName = 'music.zip'): Promise<void> {
   const zip = new JSZip();
 
   await Promise.all(
     filenames.map(async (filename) => {
-      const url = `${MUSIC_PATH}/${filename}`;
+      const url = `${API_URL}/api/music/stream/${encodeURIComponent(filename)}`;
       const response = await fetch(url);
       if (!response.ok) {
         console.warn(`Could not fetch ${filename}: ${response.statusText}`);

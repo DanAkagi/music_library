@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import LibraryView from '@/views/LibraryView.vue';
 import PlaylistsView from '@/views/PlaylistsView.vue';
 import GeneratePlaylistView from '@/views/GeneratePlaylistView.vue';
+import BlacklistView from '@/views/BlacklistView.vue';
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -20,6 +21,11 @@ const router = createRouter({
       path: '/generate',
       name: 'generate',
       component: GeneratePlaylistView,
+    },
+    {
+      path: '/blacklist',
+      name: 'blacklist',
+      component: BlacklistView,
     },
   ],
 });

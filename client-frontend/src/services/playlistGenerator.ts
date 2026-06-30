@@ -38,14 +38,20 @@ export function applyFilters(tracks: Track[], criteria: PlaylistCriteria): Track
     }
 
     // --- Year range ---
-    if (criteria.yearMin !== undefined && t.year !== undefined && t.year < criteria.yearMin) return false;
-    if (criteria.yearMax !== undefined && t.year !== undefined && t.year > criteria.yearMax) return false;
+    // FIX (bug #3) : un morceau dont l'année est inconnue ne doit PAS contourner
+    // le filtre. On applique la même logique que pour artiste/genre/langue :
+    // une donnée manquante => le critère ne peut pas être vérifié => exclusion.
+    if (criteria.yearMin !== undefined || criteria.yearMax !== undefined) {
+      if (t.year === undefined) return false;
+      if (criteria.yearMin !== undefined && t.year < criteria.yearMin) return false;
+      if (criteria.yearMax !== undefined && t.year > criteria.yearMax) return false;
+    }
 
     return true;
   });
 }
 
-/** Shuffle array in place (Fisher-Yates). */
+/** Shuffle array in place (Fisher-Yates). Used initially to break monotony. */
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -56,63 +62,125 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 /**
- * Generate one playlist respecting optional total-duration constraints.
- * If maxDurationMinutes is set, greedily fills up to the limit.
- * If minDurationMinutes is set, returns [] when total falls short.
+ * Calcule une signature unique et fiable pour un ensemble de morceaux,
+ * indépendamment de leur ordre.
+ *
+ * FIX (bug #4a) : on n'utilise plus `t.filename` (potentiellement absent ou
+ * non-unique selon les sources d'import) mais la position du morceau dans le
+ * `pool` filtré de cet appel, qui est garantie unique par construction du
+ * backtracking (chaque index n'est visité qu'une seule fois par branche).
  */
-function buildPlaylist(candidates: Track[], criteria: PlaylistCriteria): Track[] {
-  if (!criteria.maxDurationMinutes) {
-    // No duration cap — return all candidates
-    const total = candidates.reduce((s, t) => s + (t.duration || 0), 0);
-    if (criteria.minDurationMinutes && total < criteria.minDurationMinutes * 60) return [];
-    return candidates;
-  }
-
-  const maxSec = criteria.maxDurationMinutes * 60;
-  const minSec = (criteria.minDurationMinutes || 0) * 60;
-  let total = 0;
-  const result: Track[] = [];
-  for (const t of candidates) {
-    if (total + (t.duration || 0) <= maxSec) {
-      result.push(t);
-      total += t.duration || 0;
-    }
-  }
-  if (total < minSec) return [];
-  return result;
+function signatureFromIndices(indices: number[]): string {
+  return [...indices].sort((a, b) => a - b).join(',');
 }
 
 /**
- * Generate up to `count` distinct playlist combinations.
- * Each combination is a different random ordering of the filtered pool,
- * sliced to fit duration constraints.
+ * Generate up to `count` distinct playlist combinations using backtracking.
+ * Explores possibilities methodically instead of relying purely on luck.
+ *
+ * @param previousSignatures Signatures de combinaisons déjà proposées lors d'appels
+ *   précédents (ex: clics successifs sur "régénérer"). Le Set est complété en
+ *   place : le même Set peut être réutilisé d'un appel à l'autre pour éviter
+ *   de reproposer une combinaison déjà vue, même réordonnée.
+ *   FIX (bug #4b) : corrige les "doublons" perçus entre deux générations
+ *   successives, dus au fait que le dédoublonnage était auparavant local à
+ *   un seul appel de la fonction.
  */
 export function generatePlaylists(
   tracks: Track[],
   criteria: PlaylistCriteria,
-  count: number = 3
+  count: number = 3,
+  previousSignatures: Set<string> = new Set()
 ): Track[][] {
-  const pool = applyFilters(tracks, criteria);
+  // FIX (bug #2) : `count` est un plafond, pas un objectif à atteindre.
+  // Une valeur nulle ou négative ne doit produire aucune playlist.
+  if (count <= 0) return [];
+
+  // 1. Filtrer les morceaux valides
+  let pool = applyFilters(tracks, criteria);
   if (pool.length === 0) return [];
 
-  const results: Track[][] = [];
-  const signatures = new Set<string>();
-  const MAX_ATTEMPTS = count * 10;
-  let attempts = 0;
+  // Mélanger initialement le pool pour que l'exploration de l'arbre
+  // ne commence pas toujours par les mêmes morceaux à chaque appel global
+  pool = shuffle(pool);
 
-  while (results.length < count && attempts < MAX_ATTEMPTS) {
-    attempts++;
-    const shuffled = shuffle(pool);
-    const playlist = buildPlaylist(shuffled, criteria);
-    if (playlist.length === 0) continue;
+  const minSec = (criteria.minDurationMinutes || 0) * 60;
+  const maxSec = criteria.maxDurationMinutes ? (criteria.maxDurationMinutes * 60) + 59 : Infinity;
 
-    // Signature = sorted filenames to detect duplicate sets
-    const sig = [...playlist].map((t) => t.filename).sort().join('|');
-    if (!signatures.has(sig)) {
-      signatures.add(sig);
-      results.push(playlist);
-    }
+  // FIX (bug #2) : table des durées cumulées restantes (de l'index i jusqu'à
+  // la fin du pool) pour pouvoir élaguer les branches qui ne pourront jamais
+  // atteindre `minSec`, même en prenant tous les morceaux restants.
+  const remainingDuration = new Array<number>(pool.length + 1).fill(0);
+  for (let i = pool.length - 1; i >= 0; i--) {
+    remainingDuration[i] = remainingDuration[i + 1] + (pool[i].duration || 0);
   }
+
+  const results: Track[][] = [];
+  const signatures = previousSignatures;
+
+  /**
+   * Fonction récursive de Backtracking
+   * @param index L'index du morceau courant dans le pool
+   * @param currentTracks Les morceaux actuellement sélectionnés dans la combinaison
+   * @param currentIndices Les index (dans pool) des morceaux sélectionnés, pour la signature
+   * @param currentDuration La durée cumulée en secondes
+   */
+  function backtrack(
+    index: number,
+    currentTracks: Track[],
+    currentIndices: number[],
+    currentDuration: number
+  ) {
+    // Si on a trouvé le nombre de playlists demandées, on stoppe l'exploration
+    if (results.length >= count) return;
+
+    // FIX (bug #2) : élagage — si même en ajoutant tous les morceaux restants
+    // on ne peut pas atteindre minSec, inutile d'explorer cette branche plus loin.
+    if (currentDuration + remainingDuration[index] < minSec) return;
+
+    // Si la combinaison actuelle respecte les bornes ET contient au moins un
+    // morceau, on l'évalue.
+    // FIX (bug #1) : on exige explicitement currentTracks.length > 0 pour ne
+    // jamais accepter une playlist vide (cas minSec === 0).
+    if (
+      currentTracks.length > 0 &&
+      currentDuration >= minSec &&
+      currentDuration <= maxSec
+    ) {
+      // Signature unique basée sur les index des morceaux dans le pool (triés)
+      // pour éviter de proposer deux fois les mêmes morceaux dans un ordre différent.
+      const sig = signatureFromIndices(currentIndices);
+
+      if (!signatures.has(sig)) {
+        signatures.add(sig);
+        // On insère une copie mélangée pour l'expérience d'écoute de l'utilisateur
+        results.push(shuffle(currentTracks));
+      }
+    }
+
+    // Si on a dépassé le max ou qu'on a parcouru tout le pool, on s'arrête pour cette branche
+    if (currentDuration > maxSec || index >= pool.length) return;
+
+    // --- EXPLORATION DES CHOIX ---
+
+    // Choix 1 : On inclut le morceau actuel (si sa durée est connue)
+    const track = pool[index];
+    const trackDuration = track.duration || 0;
+
+    if (currentDuration + trackDuration <= maxSec) {
+      currentTracks.push(track);
+      currentIndices.push(index);
+      backtrack(index + 1, currentTracks, currentIndices, currentDuration + trackDuration);
+      currentIndices.pop();
+      currentTracks.pop(); // Backtrack (on retire le morceau pour tester l'autre branche)
+    }
+
+    // Choix 2 : On n'inclut PAS le morceau actuel, on passe directement au suivant
+    backtrack(index + 1, currentTracks, currentIndices, currentDuration);
+  }
+
+  // Lancer l'exploration à partir du premier élément
+  backtrack(0, [], [], 0);
 
   return results;
 }

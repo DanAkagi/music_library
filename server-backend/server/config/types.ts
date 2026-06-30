@@ -1,6 +1,6 @@
 export interface MusicFileMetadata {
   filename: string;
-  filepath: string;
+  filepath?: string | null;
   title?: string;
   artist?: string;
   album?: string;

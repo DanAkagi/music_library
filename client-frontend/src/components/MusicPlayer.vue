@@ -39,7 +39,7 @@ const audioEl = ref<HTMLAudioElement | null>(null);
 const currentTime = ref(0);
 const duration = ref(0);
 const volume = ref(1);
-const MUSIC_PATH = import.meta.env.VITE_MUSIC_PATH || '/music';
+const API_URL = import.meta.env.VITE_URL_SERVER || 'http://localhost:3000';
 
 let playPromise: Promise<void> | null = null;
 
@@ -69,8 +69,8 @@ watch(
     if (!newTrack || !audioEl.value) return;
     currentTime.value = 0;
     duration.value = 0;
-    const encoded = newTrack.filename.split('/').map(encodeURIComponent).join('/');
-    audioEl.value.src = `${MUSIC_PATH}/${encoded}`;
+    const encoded = encodeURIComponent(newTrack.filename);
+    audioEl.value.src = `${API_URL}/api/music/stream/${encoded}`;
     audioEl.value.load();
     audioEl.value.addEventListener('canplay', () => {
       if (musicStore.isPlaying) safePlay();

@@ -6,6 +6,7 @@
         <RouterLink to="/" exact-active-class="active">Tous</RouterLink>
         <RouterLink to="/playlists" active-class="active">Saved Playlists</RouterLink>
         <RouterLink to="/generate" active-class="active">Generate Playlist</RouterLink>
+        <RouterLink to="/blacklist" active-class="active">Blacklist</RouterLink>
       </nav>
     </header>
 
