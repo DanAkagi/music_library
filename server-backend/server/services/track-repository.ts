@@ -93,3 +93,20 @@ export const getAllTracks = async (): Promise<TrackRow[]> => {
   );
   return rows.map(mapRow);
 };
+
+export const updateTrackGenre = async (
+  filename: string,
+  genre: string | null
+): Promise<TrackRow | null> => {
+  const [result] = await getPool().execute<ResultSetHeader>(
+    'UPDATE tracks SET genre = ? WHERE filename = ?',
+    [genre, filename]
+  );
+  if (result.affectedRows === 0) return null;
+
+  const [rows] = await getPool().execute<RowDataPacket[]>(
+    'SELECT * FROM tracks WHERE filename = ?',
+    [filename]
+  );
+  return rows[0] ? mapRow(rows[0]) : null;
+};

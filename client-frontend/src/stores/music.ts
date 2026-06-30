@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { loadTracks } from '@/services/trackService';
+import { loadTracks, patchTrackGenre } from '@/services/trackService';
 import type { Track } from '@/services/types';
 
 export const useMusicStore = defineStore('music', () => {
@@ -81,6 +81,18 @@ export const useMusicStore = defineStore('music', () => {
     isPlaying.value = !isPlaying.value;
   };
 
+  const saveTrackGenre = async (filename: string, genre: string): Promise<Track> => {
+    const updated = await patchTrackGenre(filename, genre.trim());
+    const idx = tracks.value.findIndex((t) => t.filename === filename);
+    if (idx !== -1) {
+      tracks.value[idx] = { ...tracks.value[idx], genre: updated.genre };
+    }
+    if (currentTrack.value?.filename === filename) {
+      currentTrack.value = { ...currentTrack.value, genre: updated.genre };
+    }
+    return updated;
+  };
+
   return {
     tracks,
     isLoading,
@@ -95,6 +107,7 @@ export const useMusicStore = defineStore('music', () => {
     allGenres,
     allLanguages,
     fetchTracks,
+    saveTrackGenre,
     playTrack,
     playNext,
     playPrev,

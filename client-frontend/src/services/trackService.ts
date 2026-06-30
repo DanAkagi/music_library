@@ -8,6 +8,14 @@ export async function loadTracks(): Promise<Track[]> {
   return data.tracks;
 }
 
+export async function patchTrackGenre(filename: string, genre: string): Promise<Track> {
+  const { data } = await axios.patch<{ track: Track }>(
+    `${API_URL}/api/tracks/${encodeURIComponent(filename)}`,
+    { genre }
+  );
+  return data.track;
+}
+
 export function formatDuration(seconds?: number): string {
   if (!seconds) return '--:--';
   const m = Math.floor(seconds / 60);

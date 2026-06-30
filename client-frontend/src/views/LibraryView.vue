@@ -28,6 +28,7 @@
         v-for="track in musicStore.filteredTracks"
         :key="track.filename"
         :track="track"
+        editable
         @play="playTrack(track)"
         @download="downloadOne(track)"
       >

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
-import { getAllTracks } from '../services/track-repository';
+import { getAllTracks, updateTrackGenre } from '../services/track-repository';
 import {
   getAllPlaylists,
   createPlaylist,
@@ -69,6 +69,40 @@ router.get('/tracks', async (_req: Request, res: Response) => {
   try {
     const tracks = await getAllTracks();
     res.json({ tracks });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+const parseTrackFilename = (raw: string): string | null => {
+  let filename: string;
+  try {
+    filename = decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+  if (!filename || filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    return null;
+  }
+  return filename;
+};
+
+// PATCH /api/tracks/:filename — body: { genre }
+router.patch('/tracks/:filename', async (req: Request, res: Response) => {
+  const filename = parseTrackFilename(req.params.filename);
+  if (!filename) return res.status(400).json({ error: 'Invalid filename' });
+
+  const { genre } = req.body as { genre?: unknown };
+  if (typeof genre !== 'string') {
+    return res.status(400).json({ error: 'genre string required' });
+  }
+
+  const normalized = genre.trim() || null;
+
+  try {
+    const track = await updateTrackGenre(filename, normalized);
+    if (!track) return res.status(404).json({ error: 'Track not found' });
+    res.json({ track });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
   }

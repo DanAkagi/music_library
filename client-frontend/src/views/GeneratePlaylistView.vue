@@ -118,8 +118,10 @@
               v-for="(track, tIdx) in playlist"
               :key="track.filename"
               :track="track"
+              editable
               @play="musicStore.playTrack(track, playlist)"
               @download="downloadOne(track)"
+              @genre-updated="onGenreUpdated"
             >
               <template #actions>
                 <select
@@ -218,6 +220,13 @@ const generate = () => {
 
 const removeTrack = (playlistIdx: number, trackIdx: number) => {
   generated.value?.[playlistIdx].splice(trackIdx, 1);
+};
+
+const onGenreUpdated = (updated: Track) => {
+  if (!generated.value) return;
+  generated.value = generated.value.map((playlist) =>
+    playlist.map((t) => (t.filename === updated.filename ? { ...t, genre: updated.genre } : t))
+  );
 };
 
 const replaceTrack = (playlistIdx: number, trackIdx: number, newFilename: string) => {
