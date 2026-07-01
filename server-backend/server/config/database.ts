@@ -55,13 +55,19 @@ export const initDatabase = async () => {
   }
 };
 
+// FEATURE : on enregistre désormais aussi `filepath` dès l'étape
+// meta-data-extractor (le chemin source du fichier au moment de l'extraction).
+// Ce filepath sera ensuite écrasé à l'étape sender-api avec le chemin dans le
+// VAULT — sauf pour les chansons exclues (ex: durée > max_duration), qui
+// conservent ainsi leur filepath source plutôt que de rester à NULL.
 export const saveMetadata = async (metadata: any) => {
   const query = `
     INSERT INTO music_metadata (
-      filename, title, artist, album, genre, year,
+      filename, filepath, title, artist, album, genre, year,
       duration, track_number, language, bitrate, sample_rate
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     ON CONFLICT (filename) DO UPDATE SET
+      filepath = EXCLUDED.filepath,
       title = EXCLUDED.title,
       artist = EXCLUDED.artist,
       album = EXCLUDED.album,
@@ -78,6 +84,7 @@ export const saveMetadata = async (metadata: any) => {
   
   const values = [
     metadata.filename,
+    metadata.filepath,
     metadata.title,
     metadata.artist,
     metadata.album,

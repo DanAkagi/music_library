@@ -136,7 +136,7 @@ export const startMetaDataExtractor = async (): Promise<void> => {
         // Save metadata to PostgreSQL
         try {
           await saveMetadata(meta);
-          logger.info(`  [DONE] ${path.basename(filepath)} → metadata extracted and saved to database`);
+          logger.info(`  [DONE] ${path.basename(filepath)} → metadata (incl. filepath) extracted and saved to database`);
         } catch (dbErr) {
           logger.error(`  [DB FAIL] ${path.basename(filepath)} | reason: ${(dbErr as Error).message}`);
         }
