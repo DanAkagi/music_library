@@ -8,6 +8,7 @@ import { startSenderApi } from './services/sender-api';
 import { startFileSuppressor } from './services/file-suppressor';
 import { closeRabbitMQ } from './config/rabbitmq';
 import { initDatabase } from './config/database';
+import { loadAppConfig } from './config/appConfig';
 
 dotenv.config();
 
@@ -23,6 +24,9 @@ app.use('/api', apiRouter);
 const startServices = async () => {
   try {
     console.log('🎵 Starting Music Library Backend...');
+
+    // Load app configuration (ex: max_duration) from process.env.CONFIG
+    loadAppConfig();
 
     // Initialize PostgreSQL database
     await initDatabase();

@@ -1,5 +1,6 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import { getMaxDurationSeconds } from './appConfig';
 
 dotenv.config();
 
@@ -148,7 +149,12 @@ export const isBlacklisted = async (value: string, typeMeta: string) => {
 };
 
 // Get all metadata from database (excluding blacklisted entries)
+// FEATURE : exclut également les chansons dont la durée dépasse max_duration
+// (configuré via le fichier pointé par process.env.CONFIG), quand cette
+// limite est définie. Une durée inconnue (NULL) n'est jamais exclue.
 export const getAllMetadata = async () => {
+  const maxDuration = getMaxDurationSeconds();
+
   const query = `
     SELECT m.* FROM music_metadata m
     WHERE NOT EXISTS (
@@ -159,10 +165,13 @@ export const getAllMetadata = async () => {
         (b.type_meta = 'language' AND m.language = b.value)
       )
     )
+    ${maxDuration !== undefined ? 'AND (m.duration IS NULL OR m.duration <= $1)' : ''}
     ORDER BY m.title
   `;
+  const values = maxDuration !== undefined ? [maxDuration] : [];
+
   try {
-    const result = await pool.query(query);
+    const result = await pool.query(query, values);
     return result.rows;
   } catch (err) {
     console.error('Failed to get metadata:', err);
@@ -171,7 +180,11 @@ export const getAllMetadata = async () => {
 };
 
 // Get filepaths from metadata (excluding blacklisted entries)
+// FEATURE : exclut également les chansons dont la durée dépasse max_duration,
+// même logique que getAllMetadata.
 export const getMusicFiles = async () => {
+  const maxDuration = getMaxDurationSeconds();
+
   const query = `
     SELECT m.filepath FROM music_metadata m
     WHERE m.filepath IS NOT NULL
@@ -183,9 +196,12 @@ export const getMusicFiles = async () => {
         (b.type_meta = 'language' AND m.language = b.value)
       )
     )
+    ${maxDuration !== undefined ? 'AND (m.duration IS NULL OR m.duration <= $1)' : ''}
   `;
+  const values = maxDuration !== undefined ? [maxDuration] : [];
+
   try {
-    const result = await pool.query(query);
+    const result = await pool.query(query, values);
     return result.rows.map(row => row.filepath);
   } catch (err) {
     console.error('Failed to get music files:', err);

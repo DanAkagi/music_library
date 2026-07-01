@@ -2,6 +2,31 @@
   <div class="playlists-view">
     <div class="view-header">
       <h2>Playlists enregistrées <span class="count">({{ playlistStore.playlists.length }})</span></h2>
+      <div class="header-actions">
+        <button
+          v-if="!mergeMode"
+          class="btn-outline"
+          :disabled="playlistStore.playlists.length < 2"
+          @click="startMergeMode"
+        >
+          <i class="bi bi-signpost-split-fill"></i> Fusionner des playlistes
+        </button>
+        <template v-else>
+          <input
+            v-model="mergeName"
+            class="rename-input"
+            placeholder="Nom de la playliste fusionnée"
+          />
+          <button
+            class="btn-sm-accent"
+            :disabled="selectedForMerge.length < 2 || !mergeName.trim()"
+            @click="confirmMerge"
+          >
+            <i class="bi bi-check-lg"></i> Fusionner ({{ selectedForMerge.length }})
+          </button>
+          <button class="btn-outline" @click="cancelMergeMode">Annuler</button>
+        </template>
+      </div>
     </div>
 
     <div v-if="playlistStore.playlists.length === 0" class="empty-state">
@@ -13,9 +38,12 @@
         v-for="pl in playlistStore.playlists"
         :key="pl.id"
         class="playlist-card"
-        :class="{ expanded: expandedId === pl.id }"
+        :class="{ expanded: expandedId === pl.id, 'merge-selected': mergeMode && selectedForMerge.includes(pl.id) }"
       >
-        <div class="playlist-card-header" @click="toggleExpand(pl.id)">
+        <div class="playlist-card-header" @click="mergeMode ? toggleMergeSelect(pl.id) : toggleExpand(pl.id)">
+          <div v-if="mergeMode" class="merge-checkbox" @click.stop="toggleMergeSelect(pl.id)">
+            <input type="checkbox" :checked="selectedForMerge.includes(pl.id)" @click.stop="toggleMergeSelect(pl.id)" />
+          </div>
           <div class="playlist-card-info">
             <div v-if="editingId === pl.id" class="rename-row" @click.stop>
               <input v-model="renameValue" class="rename-input" @keyup.enter="confirmRename(pl.id)" />
@@ -25,7 +53,7 @@
             <div v-else class="playlist-name">{{ pl.name }}</div>
             <div class="playlist-sub">{{ pl.tracks.length }} titre(s) · {{ totalDuration(pl.tracks) }}</div>
           </div>
-          <div class="playlist-card-actions" @click.stop>
+          <div v-if="!mergeMode" class="playlist-card-actions" @click.stop>
             <button @click="startEdit(pl)" title="Renommer"><i class="bi bi-pencil-fill"></i></button>
             <button @click="playPlaylist(pl)" title="Lire"><i class="bi bi-play-fill"></i></button>
             <button @click="downloadPlaylist(pl)" title="Télécharger"><i class="bi bi-download"></i></button>
@@ -33,7 +61,7 @@
           </div>
         </div>
 
-        <div v-if="expandedId === pl.id" class="playlist-tracks">
+        <div v-if="!mergeMode && expandedId === pl.id" class="playlist-tracks">
           <TrackItem
             v-for="(track, idx) in pl.tracks"
             :key="track.filename"
@@ -87,6 +115,36 @@ const editingId = ref<string | null>(null);
 const renameValue = ref('');
 const addTrackFilename = ref<Record<string, string>>({});
 
+// ── Fusion de playlistes ──
+const mergeMode = ref(false);
+const selectedForMerge = ref<string[]>([]);
+const mergeName = ref('');
+
+const startMergeMode = () => {
+  mergeMode.value = true;
+  selectedForMerge.value = [];
+  mergeName.value = '';
+  expandedId.value = null;
+};
+
+const cancelMergeMode = () => {
+  mergeMode.value = false;
+  selectedForMerge.value = [];
+  mergeName.value = '';
+};
+
+const toggleMergeSelect = (id: string) => {
+  const idx = selectedForMerge.value.indexOf(id);
+  if (idx === -1) selectedForMerge.value.push(id);
+  else selectedForMerge.value.splice(idx, 1);
+};
+
+const confirmMerge = () => {
+  const created = playlistStore.mergePlaylists(selectedForMerge.value, mergeName.value);
+  if (created) cancelMergeMode();
+};
+
+// ── Actions existantes ──
 const toggleExpand = (id: string) => {
   expandedId.value = expandedId.value === id ? null : id;
 };
@@ -133,9 +191,10 @@ const addTrack = (playlistId: string) => {
 </script>
 
 <style scoped>
-.view-header { margin-bottom: 1.25rem; }
+.view-header { margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 .view-header h2 { font-size: 1.2rem; font-weight: 700; }
 .count { color: var(--text-muted); font-weight: 400; font-size: 0.9rem; }
+.header-actions { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .empty-state { text-align: center; padding: 3rem; color: var(--text-muted); }
 
 .playlists-grid { display: flex; flex-direction: column; gap: 0.75rem; }
@@ -148,16 +207,22 @@ const addTrack = (playlistId: string) => {
   transition: border-color 0.15s;
 }
 .playlist-card.expanded { border-color: var(--accent); }
+.playlist-card.merge-selected { border-color: var(--accent); background: rgba(124, 106, 247, 0.08); }
 
 .playlist-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.6rem;
   padding: 0.9rem 1rem;
   cursor: pointer;
 }
 .playlist-card-header:hover { background: var(--surface2); }
 
+.merge-checkbox { display: flex; align-items: center; }
+.merge-checkbox input { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); }
+
+.playlist-card-info { flex: 1; min-width: 0; }
 .playlist-name { font-weight: 600; font-size: 0.95rem; }
 .playlist-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; }
 
@@ -183,9 +248,19 @@ const addTrack = (playlistId: string) => {
   padding: 0.35rem 0.75rem; border-radius: var(--radius);
   cursor: pointer; font-size: 0.82rem;
   transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
 }
 .btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .btn-outline:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-sm-accent {
+  background: var(--accent); border: none; color: #fff;
+  padding: 0.35rem 0.75rem; border-radius: var(--radius);
+  cursor: pointer; font-size: 0.82rem; white-space: nowrap;
+  transition: background 0.15s;
+}
+.btn-sm-accent:hover:not(:disabled) { background: var(--accent-soft); }
+.btn-sm-accent:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .rename-row { display: flex; gap: 0.4rem; align-items: center; }
 .rename-input {

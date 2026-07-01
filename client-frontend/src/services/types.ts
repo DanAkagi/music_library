@@ -12,12 +12,20 @@ export interface Track {
   sampleRate?: number;
 }
 
+/** Utilisateur local (profil, sans authentification serveur). */
+export interface User {
+  id: string;
+  name: string;
+}
+
 export interface Playlist {
   id: string;
   name: string;
   tracks: Track[];
   createdAt: string;
   criteria?: PlaylistCriteria;
+  /** Identifiant de l'utilisateur propriétaire de la playlist. */
+  userId: string;
 }
 
 export interface CriterionGroup {

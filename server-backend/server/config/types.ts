@@ -29,6 +29,17 @@ export type MetaDataPayload = {
 
 export type SenderApiPayload = MetaDataPayload;
 
+/**
+ * Entrée décrivant un fichier traité par sender-api à destination de
+ * file-suppressor. On y garde `duration` en plus de `filepath` pour que
+ * file-suppressor puisse lui aussi appliquer (en défense en profondeur)
+ * l'exclusion des chansons dépassant `max_duration`.
+ */
+export type FileSuppressorEntry = {
+  filepath: string; // absolute path to delete
+  duration?: number; // seconds
+};
+
 export type FileSuppressorPayload = {
-  processedFiles: string[]; // absolute paths to delete
+  processedFiles: FileSuppressorEntry[];
 };

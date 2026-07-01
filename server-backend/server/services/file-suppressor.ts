@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { getRabbitMQChannel, QUEUES } from '../config/rabbitmq';
 import { fileSuppressorLogger as logger } from '../config/logger';
+import { getMaxDurationSeconds, exceedsMaxDuration } from '../config/appConfig';
 import { QueueMessage, FileSuppressorPayload } from '../config/types';
 
 export const startFileSuppressor = async (): Promise<void> => {
@@ -25,8 +26,21 @@ export const startFileSuppressor = async (): Promise<void> => {
     const { processedFiles } = payload.data;
     logger.info(`Received ${processedFiles.length} file(s) to delete from source directory.`);
 
-    for (const filepath of processedFiles) {
+    const maxDuration = getMaxDurationSeconds();
+
+    for (const entry of processedFiles) {
+      const { filepath, duration } = entry;
       const filename = path.basename(filepath);
+
+      // FEATURE : exclure du pipeline (file-suppressor) les chansons dont la
+      // durée dépasse max_duration. En principe sender-api les a déjà écartées
+      // du pipeline plus tôt, mais on revérifie ici en défense en profondeur
+      // (au cas où le message aurait été produit/rejoué autrement).
+      if (exceedsMaxDuration(duration)) {
+        logger.warn(`  [EXCLUDED] ${filename} → duration ${duration}s exceeds max_duration (${maxDuration}s), not deleted.`);
+        continue;
+      }
+
       logger.info(`  [BEGIN] Deleting: ${filename}`);
       try {
         if (fs.existsSync(filepath)) {

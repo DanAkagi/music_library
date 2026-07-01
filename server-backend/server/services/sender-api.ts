@@ -3,10 +3,12 @@ import path from 'path';
 import { getMusicFiles, updateFilepath } from '../config/database';
 import { senderApiLogger as logger } from '../config/logger';
 import { getRabbitMQChannel, QUEUES } from '../config/rabbitmq';
+import { getMaxDurationSeconds, exceedsMaxDuration } from '../config/appConfig';
 import {
   QueueMessage,
   MetaDataPayload,
   FileSuppressorPayload,
+  FileSuppressorEntry,
   MusicFileMetadata,
 } from '../config/types';
 
@@ -41,23 +43,34 @@ export const startSenderApi = async (): Promise<void> => {
     const { files } = payload.data;
     logger.info(`Received ${files.length} file(s) to process.`);
 
-    const processedFiles: string[] = [];
+    const maxDuration = getMaxDurationSeconds();
+    const processedFiles: FileSuppressorEntry[] = [];
 
     for (const meta of files) {
       logger.info(`  [BEGIN] Processing: ${meta.filename}`);
+
+      // FEATURE : exclure du pipeline (sender-api) les chansons dont la durée
+      // dépasse max_duration (configuré via process.env.CONFIG). Le fichier
+      // reste alors dans le répertoire source et n'est donc jamais transmis
+      // à file-suppressor.
+      if (exceedsMaxDuration(meta.duration)) {
+        logger.warn(`  [EXCLUDED] ${meta.filename} → duration ${meta.duration}s exceeds max_duration (${maxDuration}s), skipped.`);
+        continue;
+      }
+
       try {
         // Copy mp3 to VAULT
         const destPath = path.join(VAULT_PATH, meta.filename);
-        
+
         if (meta.filepath && fs.existsSync(meta.filepath)) {
           fs.copyFileSync(meta.filepath, destPath);
           logger.info(`  [IN PROGRESS] ${meta.filename} → copied to VAULT`);
-          
+
           // Update filepath in database
           await updateFilepath(meta.filename, destPath);
           logger.info(`  [IN PROGRESS] ${meta.filename} → filepath updated in database`);
-          
-          processedFiles.push(meta.filepath);
+
+          processedFiles.push({ filepath: meta.filepath, duration: meta.duration });
           logger.info(`  [DONE] ${meta.filename} → processed`);
         } else {
           logger.warn(`  [SKIP] ${meta.filename} → source file not found or filepath null`);

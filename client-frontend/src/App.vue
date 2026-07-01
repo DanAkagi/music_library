@@ -8,6 +8,7 @@
         <RouterLink to="/generate" active-class="active">Generate Playlist</RouterLink>
         <RouterLink to="/blacklist" active-class="active">Blacklist</RouterLink>
       </nav>
+      <UserSwitcher />
     </header>
 
     <main class="app-main">
@@ -23,6 +24,7 @@ import { onMounted } from 'vue';
 import { RouterLink, RouterView } from 'vue-router';
 import { useMusicStore } from '@/stores/music';
 import MusicPlayer from '@/components/MusicPlayer.vue';
+import UserSwitcher from '@/components/UserSwitcher.vue';
 
 const musicStore = useMusicStore();
 

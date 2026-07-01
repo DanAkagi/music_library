@@ -1,0 +1,8 @@
+# Fichier de configuration lu par le serveur (voir process.env.CONFIG).
+# Format : une entrée par ligne, clé=valeur. Les lignes vides et celles
+# commençant par # sont ignorées.
+
+# Durée maximale (en secondes) autorisée pour une chanson.
+# Les chansons plus longues sont exclues des étapes sender-api et
+# file-suppressor, ainsi que des méthodes getAllMetadata / getMusicFiles.
+max_duration=120
