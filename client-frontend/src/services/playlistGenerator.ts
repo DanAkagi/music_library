@@ -115,6 +115,88 @@ export function generatePlaylists(
     remainingDuration[i] = remainingDuration[i + 1] + (pool[i].duration || 0);
   }
 
+  // FIX (bug #5) : couverture obligatoire de chaque valeur incluse.
+  // `applyFilters` ne garantit qu'une logique "OU" (le morceau matche au moins
+  // une des valeurs) pour construire le pool. Mais quand l'utilisateur inclut
+  // plusieurs artistes/genres/langues, chaque playlist générée doit contenir
+  // au moins un morceau pour CHACUNE de ces valeurs (logique "ET" au niveau
+  // de la combinaison), pas juste piocher dans la première valeur venue.
+  const reqArtists = criteria.artists ?? [];
+  const reqGenres = criteria.genres ?? [];
+  const reqLanguages = criteria.languages ?? [];
+
+  // Pour chaque morceau du pool, quels index de valeurs requises satisfait-il ?
+  const artistMatches: number[][] = pool.map((t) =>
+    reqArtists.reduce<number[]>((acc, a, idx) => {
+      if (t.artist?.toLowerCase().includes(a.toLowerCase())) acc.push(idx);
+      return acc;
+    }, [])
+  );
+  const genreMatches: number[][] = pool.map((t) =>
+    reqGenres.reduce<number[]>((acc, g, idx) => {
+      if (t.genre?.toLowerCase().includes(g.toLowerCase())) acc.push(idx);
+      return acc;
+    }, [])
+  );
+  const languageMatches: number[][] = pool.map((t) =>
+    reqLanguages.reduce<number[]>((acc, l, idx) => {
+      if (t.language?.toLowerCase() === l.toLowerCase()) acc.push(idx);
+      return acc;
+    }, [])
+  );
+
+  // Dernier index du pool où chaque valeur requise apparaît encore, pour élaguer
+  // les branches qui ne pourront de toute façon jamais atteindre la couverture.
+  function lastReachableIndex(matches: number[][], reqCount: number): number[] {
+    const last = new Array<number>(reqCount).fill(-1);
+    matches.forEach((idxs, poolIdx) => {
+      idxs.forEach((reqIdx) => {
+        last[reqIdx] = poolIdx;
+      });
+    });
+    return last;
+  }
+  const lastArtist = lastReachableIndex(artistMatches, reqArtists.length);
+  const lastGenre = lastReachableIndex(genreMatches, reqGenres.length);
+  const lastLanguage = lastReachableIndex(languageMatches, reqLanguages.length);
+
+  // Si une valeur requise n'apparaît dans aucun morceau du pool, aucune
+  // playlist ne pourra jamais couvrir tous les critères : inutile d'explorer.
+  if (
+    lastArtist.some((v) => v === -1) ||
+    lastGenre.some((v) => v === -1) ||
+    lastLanguage.some((v) => v === -1)
+  ) {
+    return [];
+  }
+
+  const artistCoverage = new Array<number>(reqArtists.length).fill(0);
+  const genreCoverage = new Array<number>(reqGenres.length).fill(0);
+  const languageCoverage = new Array<number>(reqLanguages.length).fill(0);
+
+  function isFullyCovered(): boolean {
+    return (
+      artistCoverage.every((c) => c > 0) &&
+      genreCoverage.every((c) => c > 0) &&
+      languageCoverage.every((c) => c > 0)
+    );
+  }
+
+  // Vrai s'il reste, à partir de `index`, une chance d'atteindre une
+  // couverture complète pour chaque valeur pas encore couverte.
+  function canStillCover(index: number): boolean {
+    for (let j = 0; j < reqArtists.length; j++) {
+      if (artistCoverage[j] === 0 && lastArtist[j] < index) return false;
+    }
+    for (let j = 0; j < reqGenres.length; j++) {
+      if (genreCoverage[j] === 0 && lastGenre[j] < index) return false;
+    }
+    for (let j = 0; j < reqLanguages.length; j++) {
+      if (languageCoverage[j] === 0 && lastLanguage[j] < index) return false;
+    }
+    return true;
+  }
+
   const results: Track[][] = [];
   const signatures = previousSignatures;
 
@@ -138,14 +220,21 @@ export function generatePlaylists(
     // on ne peut pas atteindre minSec, inutile d'explorer cette branche plus loin.
     if (currentDuration + remainingDuration[index] < minSec) return;
 
-    // Si la combinaison actuelle respecte les bornes ET contient au moins un
-    // morceau, on l'évalue.
+    // FIX (bug #5) : élagage — si une valeur requise (artiste/genre/langue) n'est
+    // plus atteignable avec les morceaux restants et n'est pas déjà couverte,
+    // cette branche ne pourra jamais produire de playlist valide.
+    if (!canStillCover(index)) return;
+
+    // Si la combinaison actuelle respecte les bornes, couvre bien chaque valeur
+    // incluse (artiste(s)/genre(s)/langue(s)) ET contient au moins un morceau,
+    // on l'évalue.
     // FIX (bug #1) : on exige explicitement currentTracks.length > 0 pour ne
     // jamais accepter une playlist vide (cas minSec === 0).
     if (
       currentTracks.length > 0 &&
       currentDuration >= minSec &&
-      currentDuration <= maxSec
+      currentDuration <= maxSec &&
+      isFullyCovered()
     ) {
       // Signature unique basée sur les index des morceaux dans le pool (triés)
       // pour éviter de proposer deux fois les mêmes morceaux dans un ordre différent.
@@ -170,9 +259,19 @@ export function generatePlaylists(
     if (currentDuration + trackDuration <= maxSec) {
       currentTracks.push(track);
       currentIndices.push(index);
+      // On incrémente la couverture pour chaque valeur requise satisfaite par ce morceau
+      artistMatches[index].forEach((j) => artistCoverage[j]++);
+      genreMatches[index].forEach((j) => genreCoverage[j]++);
+      languageMatches[index].forEach((j) => languageCoverage[j]++);
+
       backtrack(index + 1, currentTracks, currentIndices, currentDuration + trackDuration);
+
+      // Backtrack : on retire le morceau et on annule sa contribution à la couverture
+      artistMatches[index].forEach((j) => artistCoverage[j]--);
+      genreMatches[index].forEach((j) => genreCoverage[j]--);
+      languageMatches[index].forEach((j) => languageCoverage[j]--);
       currentIndices.pop();
-      currentTracks.pop(); // Backtrack (on retire le morceau pour tester l'autre branche)
+      currentTracks.pop();
     }
 
     // Choix 2 : On n'inclut PAS le morceau actuel, on passe directement au suivant
