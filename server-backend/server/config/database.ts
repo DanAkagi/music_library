@@ -23,7 +23,6 @@ export const initDatabase = async () => {
       CREATE TABLE IF NOT EXISTS music_metadata (
         id SERIAL PRIMARY KEY,
         filename VARCHAR(255) UNIQUE NOT NULL,
-        filepath VARCHAR(512),
         title VARCHAR(255),
         artist VARCHAR(255),
         album VARCHAR(255),
@@ -34,6 +33,7 @@ export const initDatabase = async () => {
         language VARCHAR(50),
         bitrate INTEGER,
         sample_rate INTEGER,
+        filepath VARCHAR(512),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
@@ -43,7 +43,7 @@ export const initDatabase = async () => {
       CREATE TABLE IF NOT EXISTS blacklist (
         id SERIAL PRIMARY KEY,
         value VARCHAR(255) NOT NULL,
-        type_meta VARCHAR(50) NOT NULL CHECK (type_meta IN ('artist', 'genre', 'language')),
+        type_meta VARCHAR(50) NOT NULL CHECK (type_meta IN ('artist', 'genre', 'language', 'album')),
         UNIQUE (value, type_meta)
       )
     `);
@@ -169,7 +169,8 @@ export const getAllMetadata = async () => {
       WHERE (
         (b.type_meta = 'artist' AND m.artist = b.value) OR
         (b.type_meta = 'genre' AND m.genre = b.value) OR
-        (b.type_meta = 'language' AND m.language = b.value)
+        (b.type_meta = 'language' AND m.language = b.value) OR
+        (b.type_meta = 'album' AND m.album = b.value)
       )
     )
     ${maxDuration !== undefined ? 'AND (m.duration IS NULL OR m.duration <= $1)' : ''}
@@ -200,7 +201,8 @@ export const getMusicFiles = async () => {
       WHERE (
         (b.type_meta = 'artist' AND m.artist = b.value) OR
         (b.type_meta = 'genre' AND m.genre = b.value) OR
-        (b.type_meta = 'language' AND m.language = b.value)
+        (b.type_meta = 'language' AND m.language = b.value) OR
+        (b.type_meta = 'album' AND m.album = b.value)
       )
     )
     ${maxDuration !== undefined ? 'AND (m.duration IS NULL OR m.duration <= $1)' : ''}
@@ -272,7 +274,8 @@ export const removeBlacklistedMetadata = async () => {
       WHERE (
         (b.type_meta = 'artist' AND music_metadata.artist = b.value) OR
         (b.type_meta = 'genre' AND music_metadata.genre = b.value) OR
-        (b.type_meta = 'language' AND music_metadata.language = b.value)
+        (b.type_meta = 'language' AND music_metadata.language = b.value) OR
+        (b.type_meta = 'album' AND music_metadata.album = b.value)
       )
     )
   `;

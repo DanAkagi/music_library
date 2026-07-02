@@ -19,6 +19,6 @@ CREATE TABLE IF NOT EXISTS music_metadata (
 CREATE TABLE IF NOT EXISTS blacklist (
   id SERIAL PRIMARY KEY,
   value VARCHAR(255) NOT NULL,
-  type_meta VARCHAR(50) NOT NULL CHECK (type_meta IN ('artist', 'genre', 'language')),
+  type_meta VARCHAR(50) NOT NULL CHECK (type_meta IN ('artist', 'genre', 'language', 'album')),
   UNIQUE (value, type_meta)
 );

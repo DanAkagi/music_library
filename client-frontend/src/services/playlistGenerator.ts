@@ -4,7 +4,7 @@ import type { Track, PlaylistCriteria } from './types';
 export function applyFilters(tracks: Track[], criteria: PlaylistCriteria): Track[] {
   return tracks.filter((t) => {
     // --- Inclusion filters (must match at least one if list is non-empty) ---
-    if (criteria.artists?.length) {
+    /*if (criteria.artists?.length) {
       const match = criteria.artists.some((a) =>
         t.artist?.toLowerCase().includes(a.toLowerCase())
       );
@@ -22,7 +22,7 @@ export function applyFilters(tracks: Track[], criteria: PlaylistCriteria): Track
       );
       if (!match) return false;
     }
-
+      */
     // --- Exclusion filters ---
     if (criteria.excludeArtists?.length) {
       const excluded = criteria.excludeArtists.some((a) =>

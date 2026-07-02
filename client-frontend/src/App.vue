@@ -1,12 +1,12 @@
 <template>
   <div class="app">
     <header class="app-header">
-      <h1 class="logo"><i class="bi bi-music-note-beamed"></i> Music Library</h1>
+      <h1 class="logo"><i class="bi bi-music-note-beamed"></i> Music Library - ETU 3117</h1>
       <nav class="tabs">
         <RouterLink to="/" exact-active-class="active">Tous</RouterLink>
         <RouterLink to="/playlists" active-class="active">Saved Playlists</RouterLink>
         <RouterLink to="/generate" active-class="active">Generate Playlist</RouterLink>
-        <RouterLink to="/blacklist" active-class="active">Blacklist</RouterLink>
+        <!-- <RouterLink to="/blacklist" active-class="active">Blacklist</RouterLink> -->
       </nav>
       <UserSwitcher />
     </header>

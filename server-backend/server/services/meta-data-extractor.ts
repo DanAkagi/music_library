@@ -64,7 +64,7 @@ const loadBlacklistFromCSV = async () => {
       const parts = line.split(',').map(p => p.trim());
       if (parts.length >= 2) {
         const [value, typeMeta] = parts;
-        if (value && typeMeta && ['artist', 'genre', 'language'].includes(typeMeta.toLowerCase())) {
+        if (value && typeMeta && ['artist', 'genre', 'language', 'album'].includes(typeMeta.toLowerCase())) {
           await addToBlacklist(value, typeMeta.toLowerCase());
           addedCount++;
         }
@@ -112,6 +112,7 @@ export const startMetaDataExtractor = async (): Promise<void> => {
         let isBlacklistedArtist = false;
         let isBlacklistedGenre = false;
         let isBlacklistedLanguage = false;
+        let isBlacklistedAlbum = false;
         
         if (meta.artist) {
           isBlacklistedArtist = await isBlacklisted(meta.artist, 'artist');
@@ -122,9 +123,12 @@ export const startMetaDataExtractor = async (): Promise<void> => {
         if (meta.language) {
           isBlacklistedLanguage = await isBlacklisted(meta.language, 'language');
         }
+        if (meta.album) {
+          isBlacklistedAlbum = await isBlacklisted(meta.album, 'album');
+        }
         
-        if (isBlacklistedArtist || isBlacklistedGenre || isBlacklistedLanguage) {
-          logger.info(`  [BLACKLISTED] ${path.basename(filepath)} | Artist: ${isBlacklistedArtist ? 'YES' : 'NO'} | Genre: ${isBlacklistedGenre ? 'YES' : 'NO'} | Language: ${isBlacklistedLanguage ? 'YES' : 'NO'}`);
+        if (isBlacklistedArtist || isBlacklistedGenre || isBlacklistedLanguage  || isBlacklistedAlbum) {
+          logger.info(`  [BLACKLISTED] ${path.basename(filepath)} | Artist: ${isBlacklistedArtist ? 'YES' : 'NO'} | Genre: ${isBlacklistedGenre ? 'YES' : 'NO'} | Language: ${isBlacklistedLanguage ? 'YES' : 'NO'} | Language: ${isBlacklistedAlbum ? 'YES' : 'NO'}`);
           continue; // Skip this file
         }
         

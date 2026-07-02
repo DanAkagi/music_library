@@ -28,8 +28,8 @@
           <div><label>Année max</label><input type="number" v-model.number="yearMax" placeholder="ex: 2024" /></div>
         </div>
         <div class="field row">
-          <div><label>Durée min (min)</label><input type="number" v-model.number="minDuration" placeholder="ex: 20" /></div>
-          <div><label>Durée max (min)</label><input type="number" v-model.number="maxDuration" placeholder="ex: 60" /></div>
+          <!-- <div><label>Durée min (en minutes)</label><input type="number" v-model.number="minDuration" placeholder="ex: 20" /></div>-->
+          <div><label>Durée max (en minutes)</label><input type="number" v-model.number="maxDuration" placeholder="ex: 60" /></div>
         </div>
         <div class="field">
           <label>Nombre de combinaisons</label>
