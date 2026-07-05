@@ -79,21 +79,38 @@ const groupPlaylistRows = (rows: PlaylistJoinRow[]): PlaylistRow[] => {
   return [...map.values()];
 };
 
-export const getAllPlaylists = async (): Promise<PlaylistRow[]> => {
-  const [rows] = await getPool().execute<PlaylistJoinRow[]>(
-    `SELECT p.id, p.name, p.criteria, p.created_at,
-            pt.filename, pt.position,
-            t.title, t.artist, t.album, t.genre, t.year, t.duration,
-            t.track_number, t.language, t.bitrate, t.sample_rate
-     FROM playlists p
-     LEFT JOIN playlist_tracks pt ON pt.playlist_id = p.id
-     LEFT JOIN tracks t ON t.filename = pt.filename
-     ORDER BY p.created_at DESC, pt.position ASC`
-  );
+const playlistQuery = `
+  SELECT p.id, p.name, p.criteria, p.created_at,
+         pt.filename, pt.position,
+         t.title, t.artist, t.album, t.genre, t.year, t.duration,
+         t.track_number, t.language, t.bitrate, t.sample_rate
+  FROM playlists p
+  LEFT JOIN playlist_tracks pt ON pt.playlist_id = p.id
+  LEFT JOIN tracks t ON t.filename = pt.filename
+  WHERE p.user_id = ?
+  ORDER BY p.created_at DESC, pt.position ASC
+`;
+
+export const getPlaylistsByUser = async (userId: number): Promise<PlaylistRow[]> => {
+  const [rows] = await getPool().execute<PlaylistJoinRow[]>(playlistQuery, [userId]);
   return groupPlaylistRows(rows);
 };
 
+const getPlaylistById = async (id: string, userId: number): Promise<PlaylistRow | null> => {
+  const playlists = await getPlaylistsByUser(userId);
+  return playlists.find((p) => p.id === id) ?? null;
+};
+
+const playlistBelongsToUser = async (playlistId: string, userId: number): Promise<boolean> => {
+  const [rows] = await getPool().execute<RowDataPacket[]>(
+    'SELECT 1 FROM playlists WHERE id = ? AND user_id = ? LIMIT 1',
+    [playlistId, userId]
+  );
+  return rows.length > 0;
+};
+
 export const createPlaylist = async (
+  userId: number,
   name: string,
   filenames: string[],
   criteria?: PlaylistCriteria
@@ -105,8 +122,8 @@ export const createPlaylist = async (
   try {
     await conn.beginTransaction();
     await conn.execute(
-      'INSERT INTO playlists (id, name, criteria) VALUES (?, ?, ?)',
-      [id, name, criteria ? JSON.stringify(criteria) : null]
+      'INSERT INTO playlists (id, user_id, name, criteria) VALUES (?, ?, ?, ?)',
+      [id, userId, name, criteria ? JSON.stringify(criteria) : null]
     );
 
     for (let i = 0; i < filenames.length; i++) {
@@ -124,38 +141,73 @@ export const createPlaylist = async (
     conn.release();
   }
 
-  const playlists = await getAllPlaylists();
-  const created = playlists.find((p) => p.id === id);
+  const created = await getPlaylistById(id, userId);
   if (!created) throw new Error('Playlist creation failed');
   return created;
 };
 
-export const renamePlaylist = async (id: string, name: string): Promise<boolean> => {
+export const mergePlaylists = async (
+  userId: number,
+  name: string,
+  playlistIds: string[]
+): Promise<PlaylistRow | null> => {
+  const uniqueIds = [...new Set(playlistIds)];
+  if (uniqueIds.length < 2) return null;
+
+  const allPlaylists = await getPlaylistsByUser(userId);
+  const selected = uniqueIds
+    .map((id) => allPlaylists.find((p) => p.id === id))
+    .filter((p): p is PlaylistRow => p != null);
+
+  if (selected.length < 2) return null;
+
+  const seen = new Set<string>();
+  const filenames: string[] = [];
+  for (const pl of selected) {
+    for (const track of pl.tracks) {
+      if (!seen.has(track.filename)) {
+        seen.add(track.filename);
+        filenames.push(track.filename);
+      }
+    }
+  }
+
+  return createPlaylist(userId, name, filenames);
+};
+
+export const renamePlaylist = async (
+  id: string,
+  userId: number,
+  name: string
+): Promise<boolean> => {
   const [result] = await getPool().execute<ResultSetHeader>(
-    'UPDATE playlists SET name = ? WHERE id = ?',
-    [name, id]
+    'UPDATE playlists SET name = ? WHERE id = ? AND user_id = ?',
+    [name, id, userId]
   );
   return result.affectedRows > 0;
 };
 
-export const deletePlaylist = async (id: string): Promise<boolean> => {
+export const deletePlaylist = async (id: string, userId: number): Promise<boolean> => {
   const [result] = await getPool().execute<ResultSetHeader>(
-    'DELETE FROM playlists WHERE id = ?',
-    [id]
+    'DELETE FROM playlists WHERE id = ? AND user_id = ?',
+    [id, userId]
   );
   return result.affectedRows > 0;
 };
 
 export const addTrackToPlaylist = async (
   playlistId: string,
+  userId: number,
   filename: string
-): Promise<boolean> => {
+): Promise<PlaylistRow | null> => {
+  if (!(await playlistBelongsToUser(playlistId, userId))) return null;
+
   const pool = getPool();
   const [dup] = await pool.execute<RowDataPacket[]>(
     'SELECT 1 FROM playlist_tracks WHERE playlist_id = ? AND filename = ? LIMIT 1',
     [playlistId, filename]
   );
-  if (dup.length > 0) return true;
+  if (dup.length > 0) return getPlaylistById(playlistId, userId);
 
   const [existing] = await pool.execute<RowDataPacket[]>(
     'SELECT MAX(position) AS max_pos FROM playlist_tracks WHERE playlist_id = ?',
@@ -167,13 +219,17 @@ export const addTrackToPlaylist = async (
     'INSERT INTO playlist_tracks (playlist_id, filename, position) VALUES (?, ?, ?)',
     [playlistId, filename, position]
   );
-  return result.affectedRows > 0;
+  if (result.affectedRows === 0) return null;
+  return getPlaylistById(playlistId, userId);
 };
 
 export const removeTrackFromPlaylist = async (
   playlistId: string,
+  userId: number,
   filename: string
 ): Promise<boolean> => {
+  if (!(await playlistBelongsToUser(playlistId, userId))) return false;
+
   const pool = getPool();
   const conn = await pool.getConnection();
 
@@ -210,9 +266,12 @@ const reorderPositions = async (conn: PoolConnection, playlistId: string) => {
 
 export const reorderPlaylistTrack = async (
   playlistId: string,
+  userId: number,
   fromIndex: number,
   toIndex: number
 ): Promise<boolean> => {
+  if (!(await playlistBelongsToUser(playlistId, userId))) return false;
+
   const pool = getPool();
   const conn = await pool.getConnection();
 

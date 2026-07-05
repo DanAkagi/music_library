@@ -4,6 +4,7 @@ import type { Playlist, Track } from '@/services/types';
 import {
   loadPlaylists,
   createPlaylistApi,
+  mergePlaylistsApi,
   renamePlaylistApi,
   deletePlaylistApi,
   addTrackToPlaylistApi,
@@ -41,6 +42,12 @@ export const usePlaylistStore = defineStore('playlists', () => {
     return playlist;
   };
 
+  const mergePlaylists = async (name: string, playlistIds: string[]): Promise<Playlist> => {
+    const playlist = await mergePlaylistsApi(name, playlistIds);
+    playlists.value.unshift(playlist);
+    return playlist;
+  };
+
   const renamePlaylist = async (id: string, newName: string) => {
     await renamePlaylistApi(id, newName);
     const pl = playlists.value.find((p) => p.id === id);
@@ -73,16 +80,23 @@ export const usePlaylistStore = defineStore('playlists', () => {
     }
   };
 
+  const clearPlaylists = () => {
+    playlists.value = [];
+    error.value = null;
+  };
+
   return {
     playlists,
     isLoading,
     error,
     fetchPlaylists,
     createPlaylist,
+    mergePlaylists,
     renamePlaylist,
     deletePlaylist,
     addTrackToPlaylist,
     removeTrackFromPlaylist,
     reorderTrack,
+    clearPlaylists,
   };
 });

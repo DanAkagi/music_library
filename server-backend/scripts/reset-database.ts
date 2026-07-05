@@ -14,8 +14,9 @@ const reset = async () => {
   await getPool().execute('TRUNCATE TABLE playlist_tracks');
   await getPool().execute('TRUNCATE TABLE playlists');
   await getPool().execute('TRUNCATE TABLE tracks');
+  await getPool().execute('TRUNCATE TABLE users');
   await getPool().execute('SET FOREIGN_KEY_CHECKS = 1');
-  console.log('✅ Tables tracks, playlists et playlist_tracks vidées.');
+  console.log('✅ Tables users, tracks, playlists et playlist_tracks vidées.');
   await closeDatabase();
 };
 

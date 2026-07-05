@@ -3,14 +3,17 @@ import fs from 'fs';
 import path from 'path';
 import { getAllTracks, updateTrackGenre } from '../services/track-repository';
 import {
-  getAllPlaylists,
+  getPlaylistsByUser,
   createPlaylist,
+  mergePlaylists,
   renamePlaylist,
   deletePlaylist,
   addTrackToPlaylist,
   removeTrackFromPlaylist,
   reorderPlaylistTrack,
 } from '../services/playlist-repository';
+import { createUser, findUserByUsername, findUserById, verifyPassword } from '../services/user-repository';
+import { requireAuth, signToken } from '../middleware/auth';
 
 const router = Router();
 
@@ -64,7 +67,60 @@ router.get('/music/stream/:filename', (req: Request, res: Response) => {
   }
 });
 
-// GET /api/tracks — all track metadata from MySQL
+// ── Auth (public) ──
+
+router.post('/auth/register', async (req: Request, res: Response) => {
+  const { username, password } = req.body as { username?: string; password?: string };
+  if (!username?.trim() || !password) {
+    return res.status(400).json({ error: 'username and password required' });
+  }
+  if (password.length < 4) {
+    return res.status(400).json({ error: 'Password must be at least 4 characters' });
+  }
+
+  try {
+    const existing = await findUserByUsername(username);
+    if (existing) return res.status(409).json({ error: 'Username already taken' });
+
+    const user = await createUser(username, password);
+    const token = signToken(user);
+    res.status(201).json({ token, user });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+router.post('/auth/login', async (req: Request, res: Response) => {
+  const { username, password } = req.body as { username?: string; password?: string };
+  if (!username?.trim() || !password) {
+    return res.status(400).json({ error: 'username and password required' });
+  }
+
+  try {
+    const row = await findUserByUsername(username);
+    if (!row || !(await verifyPassword(password, row.password_hash))) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    const user = { id: row.id, username: row.username };
+    const token = signToken(user);
+    res.json({ token, user });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+router.get('/auth/me', requireAuth, async (req: Request, res: Response) => {
+  try {
+    const user = await findUserById(req.user!.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ user });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// GET /api/tracks — bibliothèque commune (public)
 router.get('/tracks', async (_req: Request, res: Response) => {
   try {
     const tracks = await getAllTracks();
@@ -108,10 +164,10 @@ router.patch('/tracks/:filename', async (req: Request, res: Response) => {
   }
 });
 
-// GET /api/playlists
-router.get('/playlists', async (_req: Request, res: Response) => {
+// GET /api/playlists — playlists de l'utilisateur connecté
+router.get('/playlists', requireAuth, async (req: Request, res: Response) => {
   try {
-    const playlists = await getAllPlaylists();
+    const playlists = await getPlaylistsByUser(req.user!.id);
     res.json({ playlists });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -119,7 +175,7 @@ router.get('/playlists', async (_req: Request, res: Response) => {
 });
 
 // POST /api/playlists — body: { name, tracks: [{ filename }], criteria? }
-router.post('/playlists', async (req: Request, res: Response) => {
+router.post('/playlists', requireAuth, async (req: Request, res: Response) => {
   const { name, tracks, criteria } = req.body as {
     name?: string;
     tracks?: { filename: string }[];
@@ -132,7 +188,24 @@ router.post('/playlists', async (req: Request, res: Response) => {
 
   try {
     const filenames = tracks.map((t) => t.filename).filter(Boolean);
-    const playlist = await createPlaylist(name.trim(), filenames, criteria as never);
+    const playlist = await createPlaylist(req.user!.id, name.trim(), filenames, criteria as never);
+    res.status(201).json({ playlist });
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message });
+  }
+});
+
+// POST /api/playlists/merge — body: { name, playlistIds: string[] }
+router.post('/playlists/merge', requireAuth, async (req: Request, res: Response) => {
+  const { name, playlistIds } = req.body as { name?: string; playlistIds?: string[] };
+
+  if (!name?.trim() || !Array.isArray(playlistIds) || playlistIds.length < 2) {
+    return res.status(400).json({ error: 'name and at least 2 playlistIds required' });
+  }
+
+  try {
+    const playlist = await mergePlaylists(req.user!.id, name.trim(), playlistIds);
+    if (!playlist) return res.status(400).json({ error: 'Could not merge playlists' });
     res.status(201).json({ playlist });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -140,12 +213,12 @@ router.post('/playlists', async (req: Request, res: Response) => {
 });
 
 // PATCH /api/playlists/:id — body: { name }
-router.patch('/playlists/:id', async (req: Request, res: Response) => {
+router.patch('/playlists/:id', requireAuth, async (req: Request, res: Response) => {
   const { name } = req.body as { name?: string };
   if (!name?.trim()) return res.status(400).json({ error: 'name required' });
 
   try {
-    const ok = await renamePlaylist(req.params.id, name.trim());
+    const ok = await renamePlaylist(req.params.id, req.user!.id, name.trim());
     if (!ok) return res.status(404).json({ error: 'Playlist not found' });
     res.json({ ok: true });
   } catch (err) {
@@ -154,9 +227,9 @@ router.patch('/playlists/:id', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/playlists/:id
-router.delete('/playlists/:id', async (req: Request, res: Response) => {
+router.delete('/playlists/:id', requireAuth, async (req: Request, res: Response) => {
   try {
-    const ok = await deletePlaylist(req.params.id);
+    const ok = await deletePlaylist(req.params.id, req.user!.id);
     if (!ok) return res.status(404).json({ error: 'Playlist not found' });
     res.json({ ok: true });
   } catch (err) {
@@ -165,15 +238,13 @@ router.delete('/playlists/:id', async (req: Request, res: Response) => {
 });
 
 // POST /api/playlists/:id/tracks — body: { filename }
-router.post('/playlists/:id/tracks', async (req: Request, res: Response) => {
+router.post('/playlists/:id/tracks', requireAuth, async (req: Request, res: Response) => {
   const { filename } = req.body as { filename?: string };
   if (!filename) return res.status(400).json({ error: 'filename required' });
 
   try {
-    const ok = await addTrackToPlaylist(req.params.id, filename);
-    if (!ok) return res.status(404).json({ error: 'Could not add track' });
-    const playlists = await getAllPlaylists();
-    const playlist = playlists.find((p) => p.id === req.params.id);
+    const playlist = await addTrackToPlaylist(req.params.id, req.user!.id, filename);
+    if (!playlist) return res.status(404).json({ error: 'Playlist not found' });
     res.json({ playlist });
   } catch (err) {
     res.status(500).json({ error: (err as Error).message });
@@ -181,9 +252,13 @@ router.post('/playlists/:id/tracks', async (req: Request, res: Response) => {
 });
 
 // DELETE /api/playlists/:id/tracks/:filename
-router.delete('/playlists/:id/tracks/:filename', async (req: Request, res: Response) => {
+router.delete('/playlists/:id/tracks/:filename', requireAuth, async (req: Request, res: Response) => {
   try {
-    const ok = await removeTrackFromPlaylist(req.params.id, decodeURIComponent(req.params.filename));
+    const ok = await removeTrackFromPlaylist(
+      req.params.id,
+      req.user!.id,
+      decodeURIComponent(req.params.filename)
+    );
     if (!ok) return res.status(404).json({ error: 'Track not found in playlist' });
     res.json({ ok: true });
   } catch (err) {
@@ -192,14 +267,14 @@ router.delete('/playlists/:id/tracks/:filename', async (req: Request, res: Respo
 });
 
 // PATCH /api/playlists/:id/reorder — body: { fromIndex, toIndex }
-router.patch('/playlists/:id/reorder', async (req: Request, res: Response) => {
+router.patch('/playlists/:id/reorder', requireAuth, async (req: Request, res: Response) => {
   const { fromIndex, toIndex } = req.body as { fromIndex?: number; toIndex?: number };
   if (typeof fromIndex !== 'number' || typeof toIndex !== 'number') {
     return res.status(400).json({ error: 'fromIndex and toIndex required' });
   }
 
   try {
-    const ok = await reorderPlaylistTrack(req.params.id, fromIndex, toIndex);
+    const ok = await reorderPlaylistTrack(req.params.id, req.user!.id, fromIndex, toIndex);
     if (!ok) return res.status(400).json({ error: 'Invalid reorder' });
     res.json({ ok: true });
   } catch (err) {

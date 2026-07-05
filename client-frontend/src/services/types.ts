@@ -12,14 +12,6 @@ export interface Track {
   sampleRate?: number;
 }
 
-export interface Playlist {
-  id: string;
-  name: string;
-  tracks: Track[];
-  createdAt: string;
-  criteria?: PlaylistCriteria;
-}
-
 export interface PlaylistCriteria {
   // include/exclude per category
   artists?: string[];
@@ -28,7 +20,7 @@ export interface PlaylistCriteria {
   excludeGenres?: string[];
   languages?: string[];
   year?: number;
-  /** Durée par morceau en minutes entières exactes (ex. 2 = 2:00 à 2:59). */
+  /** Durée totale de la playlist en minutes entières (ex. 30 = 30:00 à 30:59). */
   durationMinutes?: number;
   combinationCount?: number;
 }

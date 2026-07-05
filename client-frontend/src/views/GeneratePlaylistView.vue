@@ -45,9 +45,9 @@
           <div class="criteria-group criteria-group--compact">
             <h4 class="group-label">Durée (minutes)</h4>
             <div class="mini-field">
-              <label>Durée exacte (minutes)</label>
-              <input type="number" class="input" v-model.number="durationMinutes" min="0" placeholder="2" />
-              <p class="field-hint">Ex. 2 → titres de 2:00 à 2:59 (pas 1:xx ni 3:xx).</p>
+              <label>Durée totale (minutes)</label>
+              <input type="number" class="input" v-model.number="durationMinutes" min="0" placeholder="30" />
+              <p class="field-hint">Ex. 30 → playlist de 30:00 à 30:59 (somme des morceaux). Sélection aléatoire.</p>
             </div>
           </div>
         </div>

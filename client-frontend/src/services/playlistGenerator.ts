@@ -5,9 +5,12 @@ const getDurationSec = (track: Track): number => {
   return typeof d === 'number' && Number.isFinite(d) && d > 0 ? d : 0;
 };
 
-/** Minutes entières de la piste (2:50 → 2). */
-const getTrackDurationMinutes = (track: Track): number =>
-  Math.floor(getDurationSec(track) / 60);
+const sumDuration = (tracks: Track[]): number =>
+  tracks.reduce((acc, t) => acc + getDurationSec(t), 0);
+
+/** Minutes entières de la durée totale (30:59 → 30). */
+const getTotalDurationMinutes = (totalSec: number): number =>
+  Math.floor(totalSec / 60);
 
 export function normalizeCriteria(criteria: PlaylistCriteria): PlaylistCriteria {
   const c = { ...criteria };
@@ -25,7 +28,7 @@ export function normalizeCriteria(criteria: PlaylistCriteria): PlaylistCriteria 
   return c;
 }
 
-/** Apply all criteria filters to a track list. Returns matching tracks. */
+/** Filtres artiste / genre / année (pas la durée playlist). */
 export function applyFilters(tracks: Track[], criteria: PlaylistCriteria): Track[] {
   const c = normalizeCriteria(criteria);
 
@@ -66,11 +69,6 @@ export function applyFilters(tracks: Track[], criteria: PlaylistCriteria): Track
       if (t.year === undefined || t.year !== c.year) return false;
     }
 
-    if (c.durationMinutes !== undefined) {
-      if (getDurationSec(t) <= 0) return false;
-      if (getTrackDurationMinutes(t) !== c.durationMinutes) return false;
-    }
-
     return true;
   });
 }
@@ -84,6 +82,44 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
+/**
+ * Construit une playlist dont la durée totale tombe dans la minute cible.
+ * Ex. 30 → entre 30:00 et 30:59 (somme des morceaux).
+ */
+function buildPlaylist(candidates: Track[], targetMinutes: number): Track[] {
+  const minSec = targetMinutes * 60;
+  const maxSecExclusive = (targetMinutes + 1) * 60;
+  const pool = candidates.filter((t) => getDurationSec(t) > 0);
+
+  if (pool.length === 0) return [];
+
+  const tryPack = (ordered: Track[]): Track[] => {
+    const picked: Track[] = [];
+    let total = 0;
+
+    for (const track of ordered) {
+      const d = getDurationSec(track);
+      if (total + d < maxSecExclusive) {
+        picked.push(track);
+        total += d;
+      }
+    }
+
+    if (total >= minSec && getTotalDurationMinutes(total) === targetMinutes) {
+      return picked;
+    }
+    return [];
+  };
+
+  const shuffled = tryPack(shuffle(pool));
+  if (shuffled.length > 0) return shuffled;
+
+  const byLongest = tryPack([...pool].sort((a, b) => getDurationSec(b) - getDurationSec(a)));
+  if (byLongest.length > 0) return byLongest;
+
+  return [];
+}
+
 export function generatePlaylists(
   tracks: Track[],
   criteria: PlaylistCriteria,
@@ -93,14 +129,28 @@ export function generatePlaylists(
   const pool = applyFilters(tracks, normalized);
   if (pool.length === 0) return [];
 
+  const targetMinutes = normalized.durationMinutes;
+  const needsDurationTarget = targetMinutes !== undefined;
+
+  if (needsDurationTarget) {
+    const poolWithDuration = pool.filter((t) => getDurationSec(t) > 0);
+    if (poolWithDuration.length === 0) return [];
+    const maxPossible = getTotalDurationMinutes(sumDuration(poolWithDuration));
+    if (maxPossible < targetMinutes!) return [];
+  }
+
   const results: Track[][] = [];
   const signatures = new Set<string>();
-  const MAX_ATTEMPTS = Math.max(count * 20, 30);
+  const MAX_ATTEMPTS = Math.max(count * 40, 60);
   let attempts = 0;
 
   while (results.length < count && attempts < MAX_ATTEMPTS) {
     attempts++;
-    const playlist = shuffle(pool);
+
+    const playlist = needsDurationTarget
+      ? buildPlaylist(pool, targetMinutes!)
+      : shuffle(pool);
+
     if (playlist.length === 0) continue;
 
     const sig = [...playlist].map((t) => t.filename).sort().join('|');

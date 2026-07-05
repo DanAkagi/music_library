@@ -5,6 +5,14 @@
         <h2 class="page-title">Playlists</h2>
         <p class="page-subtitle">{{ playlistStore.playlists.length }} enregistrée{{ playlistStore.playlists.length !== 1 ? 's' : '' }}</p>
       </div>
+      <button
+        type="button"
+        class="btn btn-primary"
+        :disabled="selectedIds.size < 2"
+        @click="openMergeModal"
+      >
+        Fusionner ({{ selectedIds.size }})
+      </button>
     </header>
 
     <div v-if="playlistStore.playlists.length === 0" class="empty-state">
@@ -16,9 +24,16 @@
         v-for="pl in playlistStore.playlists"
         :key="pl.id"
         class="playlist-card card"
-        :class="{ expanded: expandedId === pl.id }"
+        :class="{ expanded: expandedId === pl.id, selected: selectedIds.has(pl.id) }"
       >
         <div class="playlist-card-header" @click="toggleExpand(pl.id)">
+          <label class="playlist-check" @click.stop>
+            <input
+              type="checkbox"
+              :checked="selectedIds.has(pl.id)"
+              @change="toggleSelect(pl.id)"
+            />
+          </label>
           <div class="playlist-card-info">
             <div v-if="editingId === pl.id" class="rename-row" @click.stop>
               <input v-model="renameValue" class="input rename-input" @keyup.enter="confirmRename(pl.id)" />
@@ -74,6 +89,39 @@
         </div>
       </article>
     </div>
+
+    <div v-if="showMergeModal" class="modal-overlay" @click.self="closeMergeModal">
+      <div class="modal card" role="dialog" aria-labelledby="merge-title">
+        <h3 id="merge-title" class="modal-title">Fusionner les playlists</h3>
+        <p class="modal-sub">
+          {{ selectedIds.size }} playlist{{ selectedIds.size > 1 ? 's' : '' }} sélectionnée{{ selectedIds.size > 1 ? 's' : '' }}
+          — les doublons seront supprimés, les originales conservées.
+        </p>
+        <div class="field">
+          <label for="merge-name">Nom de la nouvelle playlist</label>
+          <input
+            id="merge-name"
+            v-model="mergeName"
+            class="input"
+            placeholder="Ma playlist fusionnée"
+            @keyup.enter="confirmMerge"
+            @keyup.escape="closeMergeModal"
+          />
+        </div>
+        <p v-if="mergeError" class="merge-error">{{ mergeError }}</p>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-outline" @click="closeMergeModal">Annuler</button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            :disabled="!mergeName.trim() || isMerging"
+            @click="confirmMerge"
+          >
+            {{ isMerging ? '…' : 'Fusionner' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -93,6 +141,48 @@ const expandedId = ref<string | null>(null);
 const editingId = ref<string | null>(null);
 const renameValue = ref('');
 const addTrackFilename = ref<Record<string, string>>({});
+const selectedIds = ref<Set<string>>(new Set());
+const showMergeModal = ref(false);
+const mergeName = ref('');
+const mergeError = ref<string | null>(null);
+const isMerging = ref(false);
+
+const toggleSelect = (id: string) => {
+  const next = new Set(selectedIds.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  selectedIds.value = next;
+};
+
+const openMergeModal = () => {
+  if (selectedIds.value.size < 2) return;
+  mergeName.value = '';
+  mergeError.value = null;
+  showMergeModal.value = true;
+};
+
+const closeMergeModal = () => {
+  showMergeModal.value = false;
+  mergeError.value = null;
+};
+
+const confirmMerge = async () => {
+  const name = mergeName.value.trim();
+  if (!name || selectedIds.value.size < 2) return;
+
+  isMerging.value = true;
+  mergeError.value = null;
+  try {
+    const playlist = await playlistStore.mergePlaylists(name, [...selectedIds.value]);
+    selectedIds.value = new Set();
+    closeMergeModal();
+    expandedId.value = playlist.id;
+  } catch {
+    mergeError.value = 'Impossible de fusionner les playlists.';
+  } finally {
+    isMerging.value = false;
+  }
+};
 
 const toggleExpand = (id: string) => {
   expandedId.value = expandedId.value === id ? null : id;
@@ -141,6 +231,14 @@ const addTrack = async (playlistId: string) => {
 </script>
 
 <style scoped>
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .playlists-grid {
   display: flex;
   flex-direction: column;
@@ -157,13 +255,38 @@ const addTrack = async (playlistId: string) => {
   box-shadow: var(--shadow);
 }
 
+.playlist-card.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
 .playlist-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.75rem;
   padding: 1rem 1.15rem;
   cursor: pointer;
   transition: background 0.15s;
+}
+
+.playlist-check {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.playlist-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.playlist-card-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .playlist-card-header:hover { background: var(--surface-hover); }
@@ -208,4 +331,60 @@ const addTrack = async (playlistId: string) => {
 }
 
 .rename-input { flex: 1; min-width: 140px; }
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: grid;
+  place-items: center;
+  z-index: 200;
+  padding: 1rem;
+}
+
+.modal {
+  width: min(100%, 400px);
+  padding: 1.5rem;
+}
+
+.modal-title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.modal-sub {
+  margin-top: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.modal .field {
+  margin-top: 1.25rem;
+}
+
+.modal .field label {
+  display: block;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.modal .field .input {
+  width: 100%;
+}
+
+.merge-error {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
 </style>

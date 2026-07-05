@@ -9,6 +9,12 @@ import {
 } from '../config/types';
 import { getExistingFilenames, insertTrack } from './track-repository';
 import { isArtistBlacklisted, loadArtistBlacklist } from './artist-blacklist';
+import { isGenreBlacklisted, loadGenreBlacklist } from './genre-blacklist';
+import {
+  isDurationBlacklisted,
+  loadDurationBlacklist,
+  getDurationBlacklistReason,
+} from './duree-blacklist';
 
 const FRONTEND_MUSIC_PATH = path.resolve(
   process.env.FRONTEND_MUSIC_OUTPUT_PATH || '../client-frontend/public/music'
@@ -39,9 +45,19 @@ export const startSenderApi = async (): Promise<void> => {
     const { files } = payload.data;
     logger.info(`Received ${files.length} file(s) to send to frontend.`);
 
-    const blacklist = loadArtistBlacklist();
-    if (blacklist.size > 0) {
-      logger.info(`Artist blacklist loaded (${blacklist.size} name(s)).`);
+    const artistBlacklist = loadArtistBlacklist();
+    if (artistBlacklist.size > 0) {
+      logger.info(`Artist blacklist loaded (${artistBlacklist.size} name(s)).`);
+    }
+
+    const genreBlacklist = loadGenreBlacklist();
+    if (genreBlacklist.size > 0) {
+      logger.info(`Genre blacklist loaded (${genreBlacklist.size} name(s)).`);
+    }
+
+    const durationLimits = loadDurationBlacklist();
+    if (durationLimits.length > 0) {
+      logger.info(`Duration blacklist loaded (${durationLimits.length} limit(s)).`);
     }
 
     const existingFilenames = await getExistingFilenames();
@@ -50,10 +66,26 @@ export const startSenderApi = async (): Promise<void> => {
     for (const meta of files) {
       logger.info(`  [BEGIN] Processing: ${meta.filename}`);
       try {
-        if (isArtistBlacklisted(meta, blacklist)) {
+        if (isArtistBlacklisted(meta, artistBlacklist)) {
           const artist = meta.artist || meta.albumartist || '?';
           logger.warn(
             `  [BLACKLIST] ${meta.filename} — artist "${artist}" blocked, file stays in deposit folder`
+          );
+          continue;
+        }
+
+        if (isGenreBlacklisted(meta, genreBlacklist)) {
+          const genre = meta.genre || '?';
+          logger.warn(
+            `  [BLACKLIST] ${meta.filename} — genre "${genre}" blocked, file stays in deposit folder`
+          );
+          continue;
+        }
+
+        if (isDurationBlacklisted(meta, durationLimits)) {
+          const reason = getDurationBlacklistReason(meta, durationLimits) || '?';
+          logger.warn(
+            `  [BLACKLIST] ${meta.filename} — duration ${reason} blocked, file stays in deposit folder`
           );
           continue;
         }

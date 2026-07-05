@@ -1,5 +1,9 @@
 <template>
-  <div class="app">
+  <div v-if="isLoginPage" class="login-shell">
+    <RouterView />
+  </div>
+
+  <div v-else class="app">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-icon" aria-hidden="true">
@@ -28,6 +32,15 @@
 
       <div class="sidebar-footer">
         <span class="track-count">{{ musicStore.tracks.length }} morceaux</span>
+        <div v-if="authStore.isAuthenticated" class="user-block">
+          <span class="user-name">{{ authStore.user?.username }}</span>
+          <button type="button" class="btn btn-ghost btn-sm logout-btn" @click="handleLogout">
+            Déconnexion
+          </button>
+        </div>
+        <RouterLink v-else to="/login" class="btn btn-outline btn-sm login-link">
+          Connexion
+        </RouterLink>
       </div>
     </aside>
 
@@ -42,23 +55,43 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue';
-import { RouterLink, RouterView } from 'vue-router';
+import { computed, onMounted } from 'vue';
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import { useMusicStore } from '@/stores/music';
 import { usePlaylistStore } from '@/stores/playlists';
+import { useAuthStore } from '@/stores/auth';
+import { getAuthToken } from '@/services/http';
 import MusicPlayer from '@/components/MusicPlayer.vue';
 
 const musicStore = useMusicStore();
 const playlistStore = usePlaylistStore();
+const authStore = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 
-onMounted(() => {
+const isLoginPage = computed(() => route.name === 'login');
+
+onMounted(async () => {
   musicStore.fetchTracks();
-  playlistStore.fetchPlaylists();
+  if (getAuthToken()) {
+    const ok = await authStore.restoreSession();
+    if (ok) await playlistStore.fetchPlaylists();
+  }
 });
+
+const handleLogout = () => {
+  authStore.logout();
+  playlistStore.clearPlaylists();
+  router.push('/login');
+};
 </script>
 
 <style>
 @import './assets/global.css';
+
+.login-shell {
+  min-height: 100vh;
+}
 
 .app {
   display: flex;
@@ -172,11 +205,33 @@ onMounted(() => {
   border-top: 1px solid var(--border);
   margin-top: 1rem;
   padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
 .track-count {
   font-size: 0.78rem;
   color: var(--text-muted);
+}
+
+.user-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.user-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.logout-btn,
+.login-link {
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
 }
 
 /* ── Main area ── */
